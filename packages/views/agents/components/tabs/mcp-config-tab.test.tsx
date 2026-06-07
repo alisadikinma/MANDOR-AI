@@ -134,6 +134,7 @@ describe("McpConfigTab", () => {
       },
     });
 
+    await user.click(screen.getByRole("button", { name: /manage obsidian/i }));
     await user.click(screen.getByRole("button", { name: /remove obsidian/i }));
     await user.click(screen.getByRole("button", { name: "Remove" }));
 
@@ -148,11 +149,52 @@ describe("McpConfigTab", () => {
       mcp_config: { mcpServers: { obsidian: { command: "node" } } },
     });
 
+    await user.click(screen.getByRole("button", { name: /manage obsidian/i }));
     await user.click(screen.getByRole("button", { name: /remove obsidian/i }));
     await user.click(screen.getByRole("button", { name: "Remove" }));
 
     // null is what the backend reads as "clear this column" so the daemon
     // falls back to the CLI default instead of persisting an empty husk.
     expect(onSave).toHaveBeenCalledWith({ mcp_config: null });
+  });
+
+  it("disabling a connector moves it into disabledMcpServers without losing config", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderTab({
+      mcp_config: {
+        mcpServers: {
+          obsidian: { command: "node", args: ["main.js"] },
+          firecrawl: { command: "npx" },
+        },
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: /manage obsidian/i }));
+    await user.click(screen.getByRole("button", { name: "Disable" }));
+
+    // The entry is preserved verbatim under the sidecar key; the dispatch
+    // layer strips it before the runtime sees it.
+    expect(onSave).toHaveBeenCalledWith({
+      mcp_config: {
+        mcpServers: { firecrawl: { command: "npx" } },
+        disabledMcpServers: { obsidian: { command: "node", args: ["main.js"] } },
+      },
+    });
+  });
+
+  it("re-enabling a disabled connector moves it back into mcpServers", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderTab({
+      mcp_config: {
+        disabledMcpServers: { obsidian: { command: "node" } },
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: /manage obsidian/i }));
+    await user.click(screen.getByRole("button", { name: "Enable" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      mcp_config: { mcpServers: { obsidian: { command: "node" } } },
+    });
   });
 });

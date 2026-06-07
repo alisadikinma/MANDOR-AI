@@ -80,8 +80,28 @@ export function mergeConnectorIntoConfig(
   resolvedTemplate: unknown,
 ): Record<string, unknown> {
   const base = isPlainObject(currentConfig) ? currentConfig : {};
-  const merged = deepMerge(base, isPlainObject(resolvedTemplate) ? resolvedTemplate : {});
-  return merged as Record<string, unknown>;
+  const merged = deepMerge(
+    base,
+    isPlainObject(resolvedTemplate) ? resolvedTemplate : {},
+  ) as Record<string, unknown>;
+  // Re-adding a server that was previously disabled must resurrect it as
+  // active: drop any `disabledMcpServers` entry whose name now appears in the
+  // active map, else the server would exist in both and the list would show a
+  // stale "Disabled" twin.
+  if (
+    isPlainObject(merged.mcpServers) &&
+    isPlainObject(merged.disabledMcpServers)
+  ) {
+    const active = merged.mcpServers;
+    const disabled = { ...merged.disabledMcpServers };
+    for (const name of Object.keys(active)) delete disabled[name];
+    if (Object.keys(disabled).length === 0) {
+      delete merged.disabledMcpServers;
+    } else {
+      merged.disabledMcpServers = disabled;
+    }
+  }
+  return merged;
 }
 
 /**
