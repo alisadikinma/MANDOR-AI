@@ -70,7 +70,10 @@ export function ConnectorDirectory({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[80vh] w-full max-w-2xl flex-col gap-4">
+      {/* `sm:max-w-3xl` overrides DialogContent's base `sm:max-w-sm` cap — a
+          plain `max-w-*` (base variant) would lose to the sm: one at ≥640px and
+          the modal would stay ~384px wide. */}
+      <DialogContent className="flex max-h-[80vh] w-full max-w-[calc(100%-2rem)] flex-col gap-4 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Connector directory</DialogTitle>
           <DialogDescription>
@@ -120,7 +123,7 @@ export function ConnectorDirectory({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-2 p-1 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 p-1 sm:grid-cols-2 lg:grid-cols-3">
               {visible.map((c) => (
                 <ConnectorCard
                   key={c.id}
