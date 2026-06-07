@@ -5,6 +5,8 @@ import { ApiClient } from "../api/client";
 import { setApiInstance, setSchemaLogger } from "../api";
 import { createAuthStore, registerAuthStore } from "../auth";
 import { createChatStore, registerChatStore } from "../chat";
+import { createAccentStore, registerAccentStore } from "../theme";
+import { AccentSync } from "./accent-sync";
 import {
   I18nProvider,
   LocaleAdapterProvider,
@@ -23,6 +25,7 @@ import type { StorageAdapter } from "../types/storage";
 let initialized = false;
 let authStore: ReturnType<typeof createAuthStore>;
 let chatStore: ReturnType<typeof createChatStore>;
+let accentStore: ReturnType<typeof createAccentStore>;
 function initCore(
   apiBaseUrl: string,
   storage: StorageAdapter,
@@ -59,6 +62,9 @@ function initCore(
   chatStore = createChatStore({ storage });
   registerChatStore(chatStore);
 
+  accentStore = createAccentStore({ storage });
+  registerAccentStore(accentStore);
+
   initialized = true;
 }
 
@@ -85,6 +91,9 @@ export function CoreProvider({
   // through window.location.reload(), never client-side changeLanguage.
   const tree = (
     <QueryProvider>
+      {/* Keeps document[data-accent] in sync with the accent store after the
+          anti-FOUC script's initial stamp. */}
+      <AccentSync />
       <AuthInitializer
         onLogin={onLogin}
         onLogout={onLogout}
