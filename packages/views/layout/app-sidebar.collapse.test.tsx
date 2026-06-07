@@ -159,4 +159,25 @@ describe("AppSidebar icon-mode affordances (Phase S2)", () => {
     // open is held at false by the controlled prop, so a toggle requests true.
     expect(onOpenChange).toHaveBeenCalledWith(true);
   });
+
+  it("rail click expands the sidebar even after pointer jitter while collapsed", () => {
+    // The header trigger is display:none in icon mode, so the rail is the only
+    // pointer affordance left to expand. Regression for the resize rail
+    // swallowing the toggle: a press that carried a little movement used to be
+    // treated as a width drag and the click became a no-op, stranding the user
+    // in a collapsed sidebar. While collapsed the rail must always toggle.
+    const onOpenChange = vi.fn();
+    renderWithI18n(
+      <SidebarProvider open={false} onOpenChange={onOpenChange}>
+        <AppSidebar />
+      </SidebarProvider>,
+    );
+    const rail = document.querySelector<HTMLElement>("[data-slot='sidebar-rail']");
+    if (!rail) throw new Error("sidebar rail not found");
+    fireEvent.mouseDown(rail);
+    fireEvent.mouseMove(document, { clientX: 40 });
+    fireEvent.mouseUp(document);
+    fireEvent.click(rail);
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
 });

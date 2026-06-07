@@ -32,6 +32,11 @@ const SIDEBAR_OPEN_STORAGE_KEY = "sidebar_open"
 const SIDEBAR_WIDTH_DEFAULT = 256
 const SIDEBAR_WIDTH_MIN = 200
 const SIDEBAR_WIDTH_MAX = 360
+// Minimum pointer travel (px) before a rail press counts as a resize drag
+// rather than a click. Without it, the pixel or two of jitter a normal click
+// carries (especially on trackpads) flips the rail into "dragging" and
+// suppresses the toggle — leaving a collapsed sidebar with no way to expand.
+const SIDEBAR_DRAG_THRESHOLD = 4
 const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar_width"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
@@ -318,7 +323,7 @@ function SidebarTrigger({
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar, setWidth, setIsResizing } = useSidebar()
+  const { toggleSidebar, setWidth, setIsResizing, state } = useSidebar()
   const { t } = useTranslation("ui")
   const toggleLabel = t(($) => $.toggle_sidebar)
   const didDragRef = React.useRef(false)
@@ -326,18 +331,31 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
 
   const onMouseDown = React.useCallback(
     (e: React.MouseEvent) => {
+      // While collapsed the rail is a pure expand toggle: a width drag would be
+      // invisible (the icon rail is fixed-width) and would only swallow the
+      // click. Bail before arming any drag so the click always reaches
+      // handleClick → toggleSidebar.
+      if (state === "collapsed") return
       e.preventDefault()
       didDragRef.current = false
       const sidebarEl = (e.target as HTMLElement).closest("[data-slot='sidebar']")
       const containerEl = sidebarEl?.querySelector("[data-slot='sidebar-container']")
       if (!containerEl) return
       dragRef.current = { startX: e.clientX, startWidth: containerEl.getBoundingClientRect().width }
-      setIsResizing(true)
 
       const onMouseMove = (ev: MouseEvent) => {
         if (!dragRef.current) return
-        didDragRef.current = true
         const delta = ev.clientX - dragRef.current.startX
+        // Treat sub-threshold travel as a click, not a drag — see
+        // SIDEBAR_DRAG_THRESHOLD. Only commit to resizing once the pointer
+        // clearly moves, then latch the dragging state + cursor.
+        if (!didDragRef.current) {
+          if (Math.abs(delta) < SIDEBAR_DRAG_THRESHOLD) return
+          didDragRef.current = true
+          setIsResizing(true)
+          document.body.style.cursor = "col-resize"
+          document.body.style.userSelect = "none"
+        }
         setWidth(dragRef.current.startWidth + delta)
       }
       const onMouseUp = () => {
@@ -350,10 +368,8 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       }
       document.addEventListener("mousemove", onMouseMove)
       document.addEventListener("mouseup", onMouseUp)
-      document.body.style.cursor = "col-resize"
-      document.body.style.userSelect = "none"
     },
-    [setWidth, setIsResizing]
+    [setWidth, setIsResizing, state]
   )
 
   const handleClick = React.useCallback(() => {
