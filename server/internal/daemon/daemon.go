@@ -2596,7 +2596,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 	// Prepare against a stable user path is cheap (no clone, no copy).
 	var agentMcpConfig json.RawMessage
 	if task.Agent != nil {
-		agentMcpConfig = task.Agent.McpConfig
+		agentMcpConfig = runtimeMcpConfig(task.Agent.McpConfig)
 	}
 	if task.PriorWorkDir != "" && localAssignment == nil {
 		env = execenv.Reuse(execenv.ReuseParams{
@@ -2786,7 +2786,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 	var mcpConfig json.RawMessage
 	if task.Agent != nil {
 		customArgs = task.Agent.CustomArgs
-		mcpConfig = task.Agent.McpConfig
+		mcpConfig = runtimeMcpConfig(task.Agent.McpConfig)
 	}
 	// Two-tier model resolution: an explicit agent.model wins,
 	// then the daemon-wide MULTICA_<PROVIDER>_MODEL env var. If
