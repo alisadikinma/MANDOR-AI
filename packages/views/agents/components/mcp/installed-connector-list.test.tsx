@@ -155,6 +155,58 @@ describe("InstalledConnectorList", () => {
     expect(screen.getByText(/no agent-specific connectors/i)).toBeInTheDocument();
   });
 
+  it("renders live probe status (connected/failed/needs-auth) over enabled/disabled", () => {
+    render(
+      <InstalledConnectorList
+        servers={[
+          { name: "ok", summary: "", enabled: true },
+          { name: "broken", summary: "", enabled: true },
+          { name: "oauth", summary: "", enabled: true },
+        ]}
+        liveStatus={{
+          ok: { name: "ok", status: "connected", tool_count: 3 },
+          broken: { name: "broken", status: "failed", tool_count: 0, error: "boom" },
+          oauth: { name: "oauth", status: "needs_auth", tool_count: 0 },
+        }}
+        onRemove={noop}
+        onToggle={noop}
+      />,
+    );
+    expect(screen.getByText("Connected · 3 tools")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByText("Needs auth")).toBeInTheDocument();
+    // The static Enabled pill is replaced by the live status.
+    expect(screen.queryByText("Enabled")).not.toBeInTheDocument();
+  });
+
+  it("shows a Checking pill on every row while a probe is in flight", () => {
+    render(
+      <InstalledConnectorList
+        servers={[{ name: "a", summary: "", enabled: true }]}
+        probing
+        onRemove={noop}
+        onToggle={noop}
+      />,
+    );
+    expect(screen.getByText("Checking…")).toBeInTheDocument();
+  });
+
+  it("surfaces the failure error in the detail panel", async () => {
+    const user = userEvent.setup();
+    render(
+      <InstalledConnectorList
+        servers={[{ name: "broken", summary: "", enabled: true }]}
+        liveStatus={{
+          broken: { name: "broken", status: "failed", tool_count: 0, error: "spawn ENOENT" },
+        }}
+        onRemove={noop}
+        onToggle={noop}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /manage broken/i }));
+    expect(screen.getByText("spawn ENOENT")).toBeInTheDocument();
+  });
+
   it("removes a server only after the inline confirm", async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();

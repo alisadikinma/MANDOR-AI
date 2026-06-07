@@ -936,3 +936,28 @@ export const WorkspaceMcpConfigSchema = z
 export const EMPTY_WORKSPACE_MCP_CONFIG: { mcp_config: unknown | null } = {
   mcp_config: null,
 };
+
+// On-demand MCP connection probe. `status` stays z.string() so a future
+// status value doesn't drop the whole response; the UI maps unknown statuses
+// to a generic state. tool_count defaults to 0 for older/odd reports.
+export const McpProbeServerResultSchema = z
+  .object({
+    name: z.string(),
+    status: z.string(),
+    tool_count: z.number().default(0),
+    error: z.string().optional(),
+  })
+  .loose();
+
+export const McpProbeRequestSchema = z
+  .object({
+    id: z.string().optional(),
+    status: z.string().default("pending"),
+    results: z.array(McpProbeServerResultSchema).optional(),
+    error: z.string().optional(),
+  })
+  .loose();
+
+// Fallback is a terminal state so a malformed body ends the UI's poll loop
+// (rather than spinning forever) and surfaces as "test failed".
+export const EMPTY_MCP_PROBE_REQUEST: { status: string } = { status: "timeout" };

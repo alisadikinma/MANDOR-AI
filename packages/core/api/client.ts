@@ -41,6 +41,7 @@ import type {
   McpConnector,
   CreateMcpConnectorRequest,
   UpdateMcpConnectorRequest,
+  McpProbeRequest,
   PersonalAccessToken,
   CreatePersonalAccessTokenRequest,
   CreatePersonalAccessTokenResponse,
@@ -195,6 +196,8 @@ import {
   EMPTY_MCP_CONNECTOR_LIST,
   WorkspaceMcpConfigSchema,
   EMPTY_WORKSPACE_MCP_CONFIG,
+  McpProbeRequestSchema,
+  EMPTY_MCP_PROBE_REQUEST,
 } from "./schemas";
 
 /** Identifies the calling client to the server.
@@ -832,6 +835,36 @@ export class ApiClient {
       EMPTY_WORKSPACE_MCP_CONFIG,
       { endpoint: "PUT /api/workspaces/{id}/mcp-config" },
     ).mcp_config;
+  }
+
+  // On-demand MCP connection probe. The trigger returns a pending request
+  // (or {status:"runtime_offline"} when no daemon can run it); the caller
+  // polls getMcpProbe(id) until the status is terminal. Bodies are envelope-
+  // validated; a drifted response downgrades to a terminal "timeout" so the
+  // UI's poll loop always ends.
+  async probeAgentMcp(agentId: string): Promise<McpProbeRequest> {
+    const raw = await this.fetch<unknown>(`/api/agents/${agentId}/mcp/probe`, {
+      method: "POST",
+    });
+    return parseWithFallback(raw, McpProbeRequestSchema, EMPTY_MCP_PROBE_REQUEST, {
+      endpoint: "POST /api/agents/{id}/mcp/probe",
+    });
+  }
+
+  async probeWorkspaceMcp(wsId: string): Promise<McpProbeRequest> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${wsId}/mcp/probe`, {
+      method: "POST",
+    });
+    return parseWithFallback(raw, McpProbeRequestSchema, EMPTY_MCP_PROBE_REQUEST, {
+      endpoint: "POST /api/workspaces/{id}/mcp/probe",
+    });
+  }
+
+  async getMcpProbe(requestId: string): Promise<McpProbeRequest> {
+    const raw = await this.fetch<unknown>(`/api/mcp-probe/${requestId}`);
+    return parseWithFallback(raw, McpProbeRequestSchema, EMPTY_MCP_PROBE_REQUEST, {
+      endpoint: "GET /api/mcp-probe/{id}",
+    });
   }
 
   // Authors a workspace-custom connector (admin-gated server-side). The

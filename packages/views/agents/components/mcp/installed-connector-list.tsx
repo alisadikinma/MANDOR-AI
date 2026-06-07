@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2, Plug } from "lucide-react";
+import type { McpProbeServerResult } from "@multica/core/types";
 import { Badge } from "@multica/ui/components/ui/badge";
 import { Button } from "@multica/ui/components/ui/button";
+
+/** Live connection status keyed by server name (from a "Test connections"
+ *  probe). Absent until the user runs a probe. */
+export type LiveStatusMap = Record<string, McpProbeServerResult>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -76,6 +81,8 @@ export function extractInstalledServers(config: unknown): InstalledServer[] {
 export function InstalledConnectorList({
   servers,
   inherited,
+  liveStatus,
+  probing,
   onRemove,
   onToggle,
 }: {
@@ -87,6 +94,11 @@ export function InstalledConnectorList({
    * single-scope surfaces (e.g. the workspace settings tab).
    */
   inherited?: InstalledServer[];
+  /** Live connection status per server name from the last probe; null until a
+   *  probe completes. Overrides the enabled/disabled pill when present. */
+  liveStatus?: LiveStatusMap | null;
+  /** True while a probe is in flight — rows show a "Checking…" pill. */
+  probing?: boolean;
   onRemove: (name: string) => Promise<void> | void;
   onToggle: (name: string, enabled: boolean) => Promise<void> | void;
 }) {
@@ -100,6 +112,8 @@ export function InstalledConnectorList({
     return (
       <ServerDetail
         server={active}
+        live={liveStatus?.[active.name]}
+        probing={probing}
         onBack={() => setSelected(null)}
         onRemove={async (name) => {
           await onRemove(name);
@@ -143,9 +157,10 @@ export function InstalledConnectorList({
                     </p>
                   )}
                 </div>
-                <Badge variant="outline" className="shrink-0">
-                  Inherited
-                </Badge>
+                <InheritedPill
+                  live={liveStatus?.[server.name]}
+                  probing={probing}
+                />
               </li>
             ))}
           </ul>
@@ -186,7 +201,11 @@ export function InstalledConnectorList({
                       </p>
                     )}
                   </div>
-                  <StatusPill enabled={server.enabled} />
+                  <ConnectionPill
+                    live={liveStatus?.[server.name]}
+                    probing={probing}
+                    enabled={server.enabled}
+                  />
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
               </li>
@@ -206,13 +225,92 @@ function StatusPill({ enabled }: { enabled: boolean }) {
   );
 }
 
+/** Live connection status from a probe. `status` is server-driven — an unknown
+ *  value downgrades to "Not testable" rather than crashing (enum drift). */
+function LivePill({ result }: { result: McpProbeServerResult }) {
+  switch (result.status) {
+    case "connected":
+      return (
+        <Badge variant="default" className="shrink-0">
+          Connected
+          {result.tool_count > 0 ? ` · ${result.tool_count} tools` : ""}
+        </Badge>
+      );
+    case "failed":
+      return (
+        <Badge variant="destructive" className="shrink-0">
+          Failed
+        </Badge>
+      );
+    case "needs_auth":
+      return (
+        <Badge variant="secondary" className="shrink-0">
+          Needs auth
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="outline" className="shrink-0">
+          Not testable
+        </Badge>
+      );
+  }
+}
+
+function CheckingPill() {
+  return (
+    <Badge variant="secondary" className="shrink-0 gap-1">
+      <Loader2 className="h-3 w-3 animate-spin" />
+      Checking…
+    </Badge>
+  );
+}
+
+/** Picks the right pill for an editable server row: live probe result wins,
+ *  then an in-flight "Checking…", else the static enabled/disabled state. */
+function ConnectionPill({
+  live,
+  probing,
+  enabled,
+}: {
+  live?: McpProbeServerResult;
+  probing?: boolean;
+  enabled: boolean;
+}) {
+  if (live) return <LivePill result={live} />;
+  if (probing) return <CheckingPill />;
+  return <StatusPill enabled={enabled} />;
+}
+
+/** Pill for a read-only inherited (workspace) row: falls back to an "Inherited"
+ *  badge instead of an enabled/disabled toggle state. */
+function InheritedPill({
+  live,
+  probing,
+}: {
+  live?: McpProbeServerResult;
+  probing?: boolean;
+}) {
+  if (live) return <LivePill result={live} />;
+  if (probing) return <CheckingPill />;
+  return (
+    <Badge variant="outline" className="shrink-0">
+      Inherited
+    </Badge>
+  );
+}
+
 function ServerDetail({
   server,
+  live,
+  probing,
   onBack,
   onRemove,
   onToggle,
 }: {
   server: InstalledServer;
+  live?: McpProbeServerResult;
+  probing?: boolean;
   onBack: () => void;
   onRemove: (name: string) => Promise<void> | void;
   onToggle: (name: string, enabled: boolean) => Promise<void> | void;
@@ -248,8 +346,14 @@ function ServerDetail({
           <Plug className="h-4 w-4 shrink-0 text-muted-foreground" />
           <h3 className="truncate text-sm font-semibold">{server.name}</h3>
         </div>
-        <StatusPill enabled={server.enabled} />
+        <ConnectionPill live={live} probing={probing} enabled={server.enabled} />
       </div>
+
+      {live?.status === "failed" && live.error && (
+        <p className="rounded bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+          {live.error}
+        </p>
+      )}
 
       {server.summary && (
         <div className="space-y-1">

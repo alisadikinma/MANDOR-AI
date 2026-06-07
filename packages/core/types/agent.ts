@@ -725,3 +725,23 @@ export interface UpdateMcpConnectorRequest {
   input_schema?: McpConnectorInputSchema;
   mcp_template?: unknown;
 }
+
+/** One server's outcome from an on-demand MCP connection probe. `status` is a
+ *  server-driven string ("connected" | "failed" | "needs_auth" | "skipped") —
+ *  treat unknown values as a generic non-connected state, never crash. */
+export interface McpProbeServerResult {
+  name: string;
+  status: string;
+  tool_count: number;
+  error?: string;
+}
+
+/** A probe request's lifecycle. `status` adds "runtime_offline" (returned by
+ *  the trigger when no daemon can run the probe) to the server-side
+ *  pending|running|completed|timeout set. `id` is absent for runtime_offline. */
+export interface McpProbeRequest {
+  id?: string;
+  status: string;
+  results?: McpProbeServerResult[];
+  error?: string;
+}

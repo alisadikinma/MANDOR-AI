@@ -76,6 +76,7 @@ export function McpTab() {
           onSave={async (next) => {
             await mutation.mutateAsync(next);
           }}
+          onProbe={() => api.probeWorkspaceMcp(wsId)}
           savedToast={t(($) => $.mcp.saved_toast)}
           saveFailedToast={t(($) => $.mcp.save_failed_toast)}
         />

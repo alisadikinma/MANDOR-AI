@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 import type { Agent } from "@multica/core/types";
 import { workspaceMcpConfigOptions } from "@multica/core/agents";
+import { api } from "@multica/core/api";
 import { useT } from "../../../i18n";
 import { McpServerManager } from "../mcp/mcp-server-manager";
 import {
@@ -76,6 +77,7 @@ export function McpConfigTab({
         wsId={wsId}
         config={agent.mcp_config}
         onSave={(next) => onSave({ mcp_config: next })}
+        onProbe={() => api.probeAgentMcp(agent.id)}
         inheritedServers={inheritedServers}
         savedToast={t(($) => $.tab_body.mcp_config.saved_toast)}
         saveFailedToast={t(($) => $.tab_body.mcp_config.save_failed_toast)}
