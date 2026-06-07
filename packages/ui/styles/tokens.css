@@ -143,3 +143,34 @@
     --scrollbar-thumb-hover: oklch(1 0 0 / 18%);
     --scrollbar-track: transparent;
 }
+
+/* Blue (JIRA / Atlassian) accent axis.
+   `data-accent="blue"` is ORTHOGONAL to light/dark — it overrides only the
+   brand-derived tokens (brand, primary, ring, sidebar-primary), leaving every
+   neutral/surface token from :root / .dark intact. That is why two blocks
+   exist: one layered on the light surfaces, one on the dark surfaces, each
+   tuned for contrast against its own background. next-themes owns the
+   light/dark `class`; the accent attribute is stamped separately by the
+   anti-FOUC script + accent store.
+   Target swatch: #0052CC ≈ oklch(0.48 0.20 264). */
+:root[data-accent="blue"] {
+    --brand: oklch(0.48 0.2 264);
+    --brand-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.48 0.2 264);
+    --primary-foreground: oklch(0.985 0 0);
+    /* Ring sits one step lighter than the fill so focus rings read as a halo,
+       not a second solid block, on light surfaces. */
+    --ring: oklch(0.58 0.18 264);
+    --sidebar-primary: oklch(0.48 0.2 264);
+}
+
+.dark[data-accent="blue"] {
+    /* Lifted lightness so #0052CC-family blue keeps AA contrast against the
+       dark surface and doesn't muddy into the background. */
+    --brand: oklch(0.62 0.19 264);
+    --brand-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.62 0.19 264);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.6 0.17 264);
+    --sidebar-primary: oklch(0.62 0.19 264);
+}
