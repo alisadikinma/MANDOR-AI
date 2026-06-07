@@ -138,6 +138,19 @@ describe("AppSidebar icon-mode affordances (Phase S2)", () => {
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
   });
 
+  it("keeps a dedicated expand toggle mounted for the collapsed icon rail", () => {
+    // The expanded-mode header trigger is display:none in icon mode, so a
+    // second trigger is mounted specifically for the collapsed rail — without
+    // it the hamburger vanishes on collapse and the rail has no visible way to
+    // expand. Assert both triggers exist so that affordance can't regress away.
+    renderWithI18n(
+      <SidebarProvider defaultOpen={false}>
+        <AppSidebar />
+      </SidebarProvider>,
+    );
+    expect(document.querySelectorAll("[data-slot='sidebar-trigger']")).toHaveLength(2);
+  });
+
   it("header trigger requests a sidebar toggle", () => {
     // Drive the trigger in *controlled* mode and assert it asks the owner to
     // flip open state. This verifies our header wiring (the SidebarTrigger is

@@ -610,10 +610,16 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              {/* Collapse toggle — hidden in icon mode where the SidebarRail
-                  and ⌘B handle expansion (a toggle inside a 3rem rail would
-                  overflow). */}
+              {/* Collapse toggle — only while expanded; next to the workspace
+                  switcher it has no room in the 3rem icon rail, so the expand
+                  control moves to its own rail row below. */}
               <SidebarTrigger className="group-data-[collapsible=icon]:hidden" />
+            </SidebarMenuItem>
+            {/* Expand toggle — only in icon mode. The collapsed rail otherwise
+                had no visible way back (the rail edge and ⌘B are invisible), so
+                users got stranded collapsed. */}
+            <SidebarMenuItem className="hidden justify-center group-data-[collapsible=icon]:flex">
+              <SidebarTrigger />
             </SidebarMenuItem>
           </SidebarMenu>
           <SidebarMenu>
