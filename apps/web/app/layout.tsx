@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@multica/ui/components/ui/sonner";
 import { cn } from "@multica/ui/lib/utils";
 import { WebProviders } from "@/components/web-providers";
+import { AccentScript } from "@/components/accent-script";
 import type { SupportedLocale } from "@multica/core/i18n";
 import { RESOURCES } from "@multica/views/locales";
 import { getRequestLocale } from "@/lib/request-locale";
@@ -115,6 +116,12 @@ export default async function RootLayout({
       suppressHydrationWarning
       className={cn("antialiased font-sans h-full", inter.variable, geistMono.variable, sourceSerif.variable)}
     >
+      <head>
+        {/* Anti-FOUC accent stamper — runs before <body> + hydration so the
+            blue accent tokens resolve on first paint, mirroring next-themes'
+            blocking class script. */}
+        <AccentScript />
+      </head>
       <body className="h-full overflow-hidden">
         <ThemeProvider>
           <WebProviders locale={locale} resources={resources}>
