@@ -1,0 +1,262 @@
+{
+  "connectors": [
+    {
+      "slug": "github",
+      "name": "GitHub",
+      "icon": "github",
+      "description": "Manage issues, pull requests, repositories, and code search across your GitHub organization.",
+      "popularity": 100,
+      "input_schema": {
+        "fields": [
+          {
+            "key": "GITHUB_PERSONAL_ACCESS_TOKEN",
+            "label": "Personal Access Token",
+            "type": "password",
+            "required": true,
+            "placeholder": "ghp_xxxxxxxxxxxxxxxxxxxx",
+            "help": "Create a fine-grained PAT at github.com/settings/tokens with repo and read:org scopes."
+          }
+        ]
+      },
+      "mcp_template": {
+        "mcpServers": {
+          "github": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-github"],
+            "env": {
+              "GITHUB_PERSONAL_ACCESS_TOKEN": "{{GITHUB_PERSONAL_ACCESS_TOKEN}}"
+            }
+          }
+        }
+      }
+    },
+    {
+      "slug": "slack",
+      "name": "Slack",
+      "icon": "slack",
+      "description": "Read channels, post messages, and search your Slack workspace conversations.",
+      "popularity": 90,
+      "input_schema": {
+        "fields": [
+          {
+            "key": "SLACK_BOT_TOKEN",
+            "label": "Bot User OAuth Token",
+            "type": "password",
+            "required": true,
+            "placeholder": "xoxb-xxxxxxxxxxxx",
+            "help": "From your Slack app's OAuth & Permissions page. Requires channels:read, chat:write, and search:read scopes."
+          },
+          {
+            "key": "SLACK_TEAM_ID",
+            "label": "Team ID",
+            "type": "text",
+            "required": true,
+            "placeholder": "T0123456789",
+            "help": "Your Slack workspace Team ID (starts with T)."
+          }
+        ]
+      },
+      "mcp_template": {
+        "mcpServers": {
+          "slack": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-slack"],
+            "env": {
+              "SLACK_BOT_TOKEN": "{{SLACK_BOT_TOKEN}}",
+              "SLACK_TEAM_ID": "{{SLACK_TEAM_ID}}"
+            }
+          }
+        }
+      }
+    },
+    {
+      "slug": "notion",
+      "name": "Notion",
+      "icon": "notion",
+      "description": "Search, read, and update pages and databases in your Notion workspace.",
+      "popularity": 85,
+      "input_schema": {
+        "fields": [
+          {
+            "key": "NOTION_TOKEN",
+            "label": "Internal Integration Token",
+            "type": "password",
+            "required": true,
+            "placeholder": "ntn_xxxxxxxxxxxx",
+            "help": "Create an internal integration at notion.so/my-integrations and share the relevant pages with it."
+          }
+        ]
+      },
+      "mcp_template": {
+        "mcpServers": {
+          "notion": {
+            "command": "npx",
+            "args": ["-y", "@notionhq/notion-mcp-server"],
+            "env": {
+              "NOTION_TOKEN": "{{NOTION_TOKEN}}"
+            }
+          }
+        }
+      }
+    },
+    {
+      "slug": "figma",
+      "name": "Figma",
+      "icon": "figma",
+      "description": "Read design context, components, and variables from your Figma files.",
+      "popularity": 80,
+      "input_schema": {
+        "fields": [
+          {
+            "key": "FIGMA_API_KEY",
+            "label": "Personal Access Token",
+            "type": "password",
+            "required": true,
+            "placeholder": "figd_xxxxxxxxxxxx",
+            "help": "Generate a personal access token from Figma Settings > Account > Personal access tokens."
+          }
+        ]
+      },
+      "mcp_template": {
+        "mcpServers": {
+          "figma": {
+            "command": "npx",
+            "args": ["-y", "figma-developer-mcp", "--stdio"],
+            "env": {
+              "FIGMA_API_KEY": "{{FIGMA_API_KEY}}"
+            }
+          }
+        }
+      }
+    },
+    {
+      "slug": "atlassian",
+      "name": "Atlassian",
+      "icon": "atlassian",
+      "description": "Work with Jira issues and Confluence pages across your Atlassian Cloud site.",
+      "popularity": 75,
+      "input_schema": {
+        "fields": [
+          {
+            "key": "JIRA_URL",
+            "label": "Atlassian Site URL",
+            "type": "url",
+            "required": true,
+            "placeholder": "https://your-domain.atlassian.net",
+            "help": "The base URL of your Atlassian Cloud site."
+          },
+          {
+            "key": "JIRA_USERNAME",
+            "label": "Account Email",
+            "type": "text",
+            "required": true,
+            "placeholder": "you@example.com",
+            "help": "The email address of the Atlassian account the API token belongs to."
+          },
+          {
+            "key": "JIRA_API_TOKEN",
+            "label": "API Token",
+            "type": "password",
+            "required": true,
+            "placeholder": "ATATT3xFfGF0xxxx",
+            "help": "Create an API token at id.atlassian.com/manage-profile/security/api-tokens."
+          }
+        ]
+      },
+      "mcp_template": {
+        "mcpServers": {
+          "atlassian": {
+            "command": "npx",
+            "args": ["-y", "mcp-atlassian"],
+            "env": {
+              "JIRA_URL": "{{JIRA_URL}}",
+              "JIRA_USERNAME": "{{JIRA_USERNAME}}",
+              "JIRA_API_TOKEN": "{{JIRA_API_TOKEN}}",
+              "CONFLUENCE_URL": "{{JIRA_URL}}/wiki",
+              "CONFLUENCE_USERNAME": "{{JIRA_USERNAME}}",
+              "CONFLUENCE_API_TOKEN": "{{JIRA_API_TOKEN}}"
+            }
+          }
+        }
+      }
+    },
+    {
+      "slug": "gmail",
+      "name": "Gmail",
+      "icon": "mail",
+      "description": "Read, search, and send email through a connected Gmail account.",
+      "popularity": 70,
+      "input_schema": {
+        "fields": [
+          {
+            "key": "GMAIL_OAUTH_CREDENTIALS",
+            "label": "OAuth Credentials JSON Path",
+            "type": "text",
+            "required": true,
+            "placeholder": "/path/to/gcp-oauth.keys.json",
+            "help": "Absolute path to the Google Cloud OAuth client credentials file on the runtime host."
+          }
+        ]
+      },
+      "mcp_template": {
+        "mcpServers": {
+          "gmail": {
+            "command": "npx",
+            "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+            "env": {
+              "GMAIL_OAUTH_PATH": "{{GMAIL_OAUTH_CREDENTIALS}}"
+            }
+          }
+        }
+      }
+    },
+    {
+      "slug": "microsoft-365",
+      "name": "Microsoft 365",
+      "icon": "microsoft",
+      "description": "Access Outlook mail, calendar, OneDrive, and Teams across your Microsoft 365 tenant.",
+      "popularity": 65,
+      "input_schema": {
+        "fields": [
+          {
+            "key": "MS365_CLIENT_ID",
+            "label": "Application (client) ID",
+            "type": "text",
+            "required": true,
+            "placeholder": "00000000-0000-0000-0000-000000000000",
+            "help": "From your Azure AD app registration's Overview page."
+          },
+          {
+            "key": "MS365_TENANT_ID",
+            "label": "Directory (tenant) ID",
+            "type": "text",
+            "required": true,
+            "placeholder": "00000000-0000-0000-0000-000000000000",
+            "help": "From your Azure AD app registration's Overview page."
+          },
+          {
+            "key": "MS365_CLIENT_SECRET",
+            "label": "Client Secret",
+            "type": "password",
+            "required": true,
+            "placeholder": "xxxxxxxxxxxxxxxx",
+            "help": "Create a client secret under Certificates & secrets in your app registration."
+          }
+        ]
+      },
+      "mcp_template": {
+        "mcpServers": {
+          "microsoft365": {
+            "command": "npx",
+            "args": ["-y", "@softeria/ms-365-mcp-server"],
+            "env": {
+              "MS365_MCP_CLIENT_ID": "{{MS365_CLIENT_ID}}",
+              "MS365_MCP_TENANT_ID": "{{MS365_TENANT_ID}}",
+              "MS365_MCP_CLIENT_SECRET": "{{MS365_CLIENT_SECRET}}"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
