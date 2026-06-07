@@ -193,6 +193,8 @@ import {
   EMPTY_CREATE_BILLING_PORTAL_SESSION_RESPONSE,
   McpConnectorListSchema,
   EMPTY_MCP_CONNECTOR_LIST,
+  WorkspaceMcpConfigSchema,
+  EMPTY_WORKSPACE_MCP_CONFIG,
 } from "./schemas";
 
 /** Identifies the calling client to the server.
@@ -798,6 +800,38 @@ export class ApiClient {
       EMPTY_MCP_CONNECTOR_LIST,
       { endpoint: "GET /api/mcp-connectors" },
     );
+  }
+
+  // Workspace-level MCP config (owner/admin-gated server-side). The body is
+  // free-form `{ mcpServers, disabledMcpServers, ... }` JSON, so only the
+  // envelope is schema-validated; a drifted/missing body downgrades to null
+  // (no workspace config) rather than throwing into the settings UI.
+  async getWorkspaceMcpConfig(wsId: string): Promise<unknown | null> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${wsId}/mcp-config`,
+    );
+    return parseWithFallback(
+      raw,
+      WorkspaceMcpConfigSchema,
+      EMPTY_WORKSPACE_MCP_CONFIG,
+      { endpoint: "GET /api/workspaces/{id}/mcp-config" },
+    ).mcp_config;
+  }
+
+  async updateWorkspaceMcpConfig(
+    wsId: string,
+    config: unknown | null,
+  ): Promise<unknown | null> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${wsId}/mcp-config`,
+      { method: "PUT", body: JSON.stringify({ mcp_config: config }) },
+    );
+    return parseWithFallback(
+      raw,
+      WorkspaceMcpConfigSchema,
+      EMPTY_WORKSPACE_MCP_CONFIG,
+      { endpoint: "PUT /api/workspaces/{id}/mcp-config" },
+    ).mcp_config;
   }
 
   // Authors a workspace-custom connector (admin-gated server-side). The

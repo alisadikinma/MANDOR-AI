@@ -112,6 +112,49 @@ describe("InstalledConnectorList", () => {
     expect(onToggle).toHaveBeenCalledWith("paused", true);
   });
 
+  it("renders inherited servers in a read-only Workspace group", async () => {
+    render(
+      <InstalledConnectorList
+        servers={[{ name: "own", summary: "node a.js", enabled: true }]}
+        inherited={[{ name: "shared", summary: "npx shared", enabled: true }]}
+        onRemove={noop}
+        onToggle={noop}
+      />,
+    );
+    // Scope headers appear only when there is an inherited group.
+    expect(screen.getByText("Workspace")).toBeInTheDocument();
+    expect(screen.getByText("This agent")).toBeInTheDocument();
+    // Inherited rows are not interactive (no "Manage" affordance) and carry
+    // an Inherited badge; the agent's own row stays clickable.
+    expect(
+      screen.queryByRole("button", { name: /manage shared/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Inherited")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /manage own/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the empty hint only when both inherited and own are empty", () => {
+    const { rerender } = render(
+      <InstalledConnectorList servers={[]} onRemove={noop} onToggle={noop} />,
+    );
+    expect(screen.getByText(/no connectors yet/i)).toBeInTheDocument();
+
+    // With inherited servers but no own servers, the Workspace group shows and
+    // the own group degrades to an "add your own" hint, not the top-level one.
+    rerender(
+      <InstalledConnectorList
+        servers={[]}
+        inherited={[{ name: "shared", summary: "", enabled: true }]}
+        onRemove={noop}
+        onToggle={noop}
+      />,
+    );
+    expect(screen.getByText("Workspace")).toBeInTheDocument();
+    expect(screen.getByText(/no agent-specific connectors/i)).toBeInTheDocument();
+  });
+
   it("removes a server only after the inline confirm", async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();

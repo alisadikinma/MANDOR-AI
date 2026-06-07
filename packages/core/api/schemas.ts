@@ -921,3 +921,18 @@ export const McpConnectorSchema = z.object({
 export const McpConnectorListSchema = z.array(McpConnectorSchema);
 
 export const EMPTY_MCP_CONNECTOR_LIST: McpConnector[] = [];
+
+// Response shape for the workspace-level MCP config endpoints. The config body
+// itself is free-form JSON (`{ mcpServers, disabledMcpServers, ... }`) so it
+// stays `z.unknown()`; only the envelope is validated. A missing/invalid body
+// downgrades to `{ mcp_config: null }` (no workspace config) rather than
+// throwing into the settings UI.
+export const WorkspaceMcpConfigSchema = z
+  .object({
+    mcp_config: z.unknown().nullable().default(null),
+  })
+  .loose();
+
+export const EMPTY_WORKSPACE_MCP_CONFIG: { mcp_config: unknown | null } = {
+  mcp_config: null,
+};

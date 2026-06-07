@@ -39,9 +39,17 @@
       "repositories": "代码仓库",
       "github": "GitHub",
       "integrations": "集成",
+      "mcp": "MCP",
       "labs": "实验室",
       "members": "成员"
     }
+  },
+  "mcp": {
+    "title": "MCP 服务器",
+    "description": "与此工作区中每个智能体共享的 Model Context Protocol 服务器。每个智能体都可以添加自己的服务器，并按名称覆盖这些设置。",
+    "admin_only": "只有工作区所有者或管理员才能管理工作区 MCP 服务器。",
+    "saved_toast": "工作区 MCP 配置已保存",
+    "save_failed_toast": "保存工作区 MCP 配置失败"
   },
   "account": {
     "section_profile": "个人资料",

@@ -75,22 +75,22 @@ export function extractInstalledServers(config: unknown): InstalledServer[] {
  */
 export function InstalledConnectorList({
   servers,
+  inherited,
   onRemove,
   onToggle,
 }: {
   servers: InstalledServer[];
+  /**
+   * Read-only servers inherited from a higher scope (workspace servers shown in
+   * the agent tab). When present, the list splits into a "Workspace" group and
+   * a "This agent" group, mirroring Claude Code's scoped `/mcp` view. Omit for
+   * single-scope surfaces (e.g. the workspace settings tab).
+   */
+  inherited?: InstalledServer[];
   onRemove: (name: string) => Promise<void> | void;
   onToggle: (name: string, enabled: boolean) => Promise<void> | void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-
-  if (servers.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        No connectors yet. Use “Browse connectors” to add one.
-      </p>
-    );
-  }
 
   const active = selected
     ? (servers.find((s) => s.name === selected) ?? null)
@@ -110,31 +110,91 @@ export function InstalledConnectorList({
     );
   }
 
+  const hasInherited = (inherited?.length ?? 0) > 0;
+
+  if (servers.length === 0 && !hasInherited) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No connectors yet. Use “Browse connectors” to add one.
+      </p>
+    );
+  }
+
   return (
-    <ul className="divide-y rounded-md border" aria-label="Installed connectors">
-      {servers.map((server) => (
-        <li key={server.name}>
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/40"
-            onClick={() => setSelected(server.name)}
-            aria-label={`Manage ${server.name}`}
+    <div className="space-y-3">
+      {hasInherited && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">Workspace</p>
+          <ul
+            className="divide-y rounded-md border"
+            aria-label="Inherited connectors"
           >
-            <Plug className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{server.name}</p>
-              {server.summary && (
-                <p className="truncate font-mono text-xs text-muted-foreground">
-                  {server.summary}
-                </p>
-              )}
-            </div>
-            <StatusPill enabled={server.enabled} />
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
-        </li>
-      ))}
-    </ul>
+            {inherited!.map((server) => (
+              <li
+                key={server.name}
+                className="flex items-center gap-3 px-3 py-2"
+              >
+                <Plug className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{server.name}</p>
+                  {server.summary && (
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {server.summary}
+                    </p>
+                  )}
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  Inherited
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        {hasInherited && (
+          <p className="text-xs font-medium text-muted-foreground">
+            This agent
+          </p>
+        )}
+        {servers.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No agent-specific connectors. Use “Browse connectors” to add one.
+          </p>
+        ) : (
+          <ul
+            className="divide-y rounded-md border"
+            aria-label="Installed connectors"
+          >
+            {servers.map((server) => (
+              <li key={server.name}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/40"
+                  onClick={() => setSelected(server.name)}
+                  aria-label={`Manage ${server.name}`}
+                >
+                  <Plug className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {server.name}
+                    </p>
+                    {server.summary && (
+                      <p className="truncate font-mono text-xs text-muted-foreground">
+                        {server.summary}
+                      </p>
+                    )}
+                  </div>
+                  <StatusPill enabled={server.enabled} />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 

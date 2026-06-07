@@ -15,6 +15,8 @@ import {
   UserSchema,
   McpConnectorListSchema,
   EMPTY_MCP_CONNECTOR_LIST,
+  WorkspaceMcpConfigSchema,
+  EMPTY_WORKSPACE_MCP_CONFIG,
 } from "./schemas";
 import { parseWithFallback } from "./schema";
 
@@ -336,5 +338,39 @@ describe("McpConnectorListSchema", () => {
       { ...baseConnector, future_field: "x" },
     ]);
     expect((parsed[0] as Record<string, unknown>).future_field).toBe("x");
+  });
+});
+
+describe("WorkspaceMcpConfigSchema", () => {
+  it("passes the free-form config body through unchanged", () => {
+    const body = { mcp_config: { mcpServers: { a: { command: "x" } } } };
+    const parsed = parseWithFallback(
+      body,
+      WorkspaceMcpConfigSchema,
+      EMPTY_WORKSPACE_MCP_CONFIG,
+      { endpoint: "GET /api/workspaces/{id}/mcp-config" },
+    );
+    expect(parsed.mcp_config).toEqual(body.mcp_config);
+  });
+
+  it("defaults mcp_config to null when the field is absent", () => {
+    const parsed = parseWithFallback(
+      {},
+      WorkspaceMcpConfigSchema,
+      EMPTY_WORKSPACE_MCP_CONFIG,
+      { endpoint: "GET /api/workspaces/{id}/mcp-config" },
+    );
+    expect(parsed.mcp_config).toBeNull();
+  });
+
+  it("falls back to null config when the body is not an object (drifted contract)", () => {
+    const parsed = parseWithFallback(
+      "nope",
+      WorkspaceMcpConfigSchema,
+      EMPTY_WORKSPACE_MCP_CONFIG,
+      { endpoint: "GET /api/workspaces/{id}/mcp-config" },
+    );
+    expect(parsed).toBe(EMPTY_WORKSPACE_MCP_CONFIG);
+    expect(parsed.mcp_config).toBeNull();
   });
 });

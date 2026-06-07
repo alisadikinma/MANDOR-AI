@@ -39,9 +39,17 @@
       "repositories": "リポジトリ",
       "github": "GitHub",
       "integrations": "連携",
+      "mcp": "MCP",
       "labs": "ラボ",
       "members": "メンバー"
     }
+  },
+  "mcp": {
+    "title": "MCP サーバー",
+    "description": "このワークスペースのすべてのエージェントと共有される Model Context Protocol サーバー。各エージェントは独自のサーバーを追加でき、名前が一致する場合はそちらが優先されます。",
+    "admin_only": "ワークスペースの MCP サーバーを管理できるのは、ワークスペースのオーナーまたは管理者のみです。",
+    "saved_toast": "ワークスペースの MCP 設定を保存しました",
+    "save_failed_toast": "ワークスペースの MCP 設定の保存に失敗しました"
   },
   "account": {
     "section_profile": "プロフィール",

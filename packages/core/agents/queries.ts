@@ -119,6 +119,24 @@ export function mcpConnectorsOptions(wsId: string) {
   });
 }
 
+// Workspace-level MCP config — the servers every agent in the workspace
+// inherits. Keyed on wsId so switching workspace swaps the value automatically.
+// Owner/admin-gated server-side; for non-admins the request 403s and the query
+// surfaces an error the caller can ignore (the agent tab is already redacted
+// for them). Mutations (save) invalidate this key on success.
+export const workspaceMcpConfigKeys = {
+  all: (wsId: string) => ["workspaces", wsId, "mcp-config"] as const,
+};
+
+export function workspaceMcpConfigOptions(wsId: string) {
+  return queryOptions({
+    queryKey: workspaceMcpConfigKeys.all(wsId),
+    queryFn: () => api.getWorkspaceMcpConfig(wsId),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
 export function agentTemplateDetailOptions(slug: string) {
   return queryOptions({
     queryKey: agentTemplateKeys.detail(slug),

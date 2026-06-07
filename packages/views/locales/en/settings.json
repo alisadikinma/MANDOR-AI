@@ -39,9 +39,17 @@
       "repositories": "Repositories",
       "github": "GitHub",
       "integrations": "Integrations",
+      "mcp": "MCP",
       "labs": "Labs",
       "members": "Members"
     }
+  },
+  "mcp": {
+    "title": "MCP servers",
+    "description": "Model Context Protocol servers shared with every agent in this workspace. Each agent can add its own servers, which override these by name.",
+    "admin_only": "Only a workspace owner or admin can manage workspace MCP servers.",
+    "saved_toast": "Workspace MCP config saved",
+    "save_failed_toast": "Failed to save workspace MCP config"
   },
   "account": {
     "section_profile": "Profile",

@@ -39,9 +39,17 @@
       "repositories": "저장소",
       "github": "GitHub",
       "integrations": "연동",
+      "mcp": "MCP",
       "labs": "실험실",
       "members": "멤버"
     }
+  },
+  "mcp": {
+    "title": "MCP 서버",
+    "description": "이 워크스페이스의 모든 에이전트와 공유되는 Model Context Protocol 서버입니다. 각 에이전트는 자체 서버를 추가할 수 있으며 이름이 같으면 해당 서버가 우선합니다.",
+    "admin_only": "워크스페이스 MCP 서버는 워크스페이스 소유자 또는 관리자만 관리할 수 있습니다.",
+    "saved_toast": "워크스페이스 MCP 설정을 저장했습니다",
+    "save_failed_toast": "워크스페이스 MCP 설정 저장에 실패했습니다"
   },
   "account": {
     "section_profile": "프로필",
