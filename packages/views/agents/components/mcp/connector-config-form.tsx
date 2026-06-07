@@ -85,6 +85,21 @@ export function mergeConnectorIntoConfig(
 }
 
 /**
+ * True when the connector adds a remote MCP server — an `mcpServers` entry
+ * carrying a `url`. Remote servers authenticate via OAuth handled by the
+ * runtime CLI on first connect (the standard MCP authorization flow), so the
+ * add form must NOT ask for a token; it just merges the URL entry in.
+ */
+export function connectorUsesRemoteAuth(template: unknown): boolean {
+  if (!isPlainObject(template)) return false;
+  const servers = template.mcpServers;
+  if (!isPlainObject(servers)) return false;
+  return Object.values(servers).some(
+    (entry) => isPlainObject(entry) && typeof entry.url === "string",
+  );
+}
+
+/**
  * Schema-driven add-connector form. Renders one control per field in the
  * connector's `input_schema`, substitutes the entered values into the
  * connector's `mcp_template`, deep-merges the result into the agent's current
@@ -110,6 +125,10 @@ export function ConnectorConfigForm({
   const fields = useMemo(
     () => connector.input_schema?.fields ?? [],
     [connector.input_schema],
+  );
+  const remoteAuth = useMemo(
+    () => connectorUsesRemoteAuth(connector.mcp_template),
+    [connector.mcp_template],
   );
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -158,9 +177,17 @@ export function ConnectorConfigForm({
           }}
         >
           {fields.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              This connector needs no configuration and can be added directly.
-            </p>
+            remoteAuth ? (
+              <p className="text-xs text-muted-foreground">
+                No token needed. You&apos;ll sign in to {connector.name} in your
+                runtime the first time the agent connects — the runtime handles
+                the OAuth login.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                This connector needs no configuration and can be added directly.
+              </p>
+            )
           ) : (
             fields.map((field) => {
               const inputId = `mcp-field-${field.key}`;

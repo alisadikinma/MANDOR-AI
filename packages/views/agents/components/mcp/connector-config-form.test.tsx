@@ -12,6 +12,7 @@ import {
   substituteTemplate,
   deepMerge,
   mergeConnectorIntoConfig,
+  connectorUsesRemoteAuth,
 } from "./connector-config-form";
 
 function makeConnector(over: Partial<McpConnector> = {}): McpConnector {
@@ -166,5 +167,48 @@ describe("ConnectorConfigForm", () => {
     expect(onSave).toHaveBeenCalledWith({
       mcp_config: { mcpServers: { simple: { command: "run" } } },
     });
+  });
+
+  it("adds a remote OAuth connector with no token field and an OAuth hint", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const connector = makeConnector({
+      name: "Figma",
+      input_schema: { fields: [] },
+      mcp_template: {
+        mcpServers: { figma: { type: "http", url: "https://mcp.figma.com/mcp" } },
+      },
+    });
+    renderForm({ onSave, connector, currentConfig: null });
+
+    // No token input, and the copy explains the runtime handles login.
+    expect(screen.queryByLabelText(/token/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/handles the OAuth login/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Add connector" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      mcp_config: {
+        mcpServers: { figma: { type: "http", url: "https://mcp.figma.com/mcp" } },
+      },
+    });
+  });
+});
+
+describe("connectorUsesRemoteAuth", () => {
+  it("is true for an mcpServers entry carrying a url", () => {
+    expect(
+      connectorUsesRemoteAuth({
+        mcpServers: { figma: { type: "http", url: "https://mcp.figma.com/mcp" } },
+      }),
+    ).toBe(true);
+  });
+
+  it("is false for stdio/token templates and malformed shapes", () => {
+    expect(
+      connectorUsesRemoteAuth({ mcpServers: { x: { command: "npx" } } }),
+    ).toBe(false);
+    expect(connectorUsesRemoteAuth(null)).toBe(false);
+    expect(connectorUsesRemoteAuth({ mcpServers: "nope" })).toBe(false);
   });
 });
