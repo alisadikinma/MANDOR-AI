@@ -174,6 +174,7 @@ start: ## Start backend and frontend for the current checkout and run migrations
 	cd server && go run ./cmd/migrate up
 	@echo "Starting backend and frontend..."
 	@trap 'kill 0' EXIT; \
+		set -a; . "$(ENV_FILE)"; . scripts/local-env.sh; set +a; \
 		(cd server && go run ./cmd/server) & \
 		pnpm dev:web & \
 		wait
