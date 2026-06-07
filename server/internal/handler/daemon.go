@@ -1131,6 +1131,13 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		if agent.McpConfig != nil {
 			mcpConfig = json.RawMessage(agent.McpConfig)
 		}
+		// Workspace-level MCP servers are inherited by every agent in the
+		// workspace; the agent's own config overrides by server name. Merge
+		// here so the daemon receives one effective config — it then strips
+		// the UI-only disabledMcpServers sidecar before the runtime sees it.
+		if wsMcp, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), agent.WorkspaceID); err == nil && len(wsMcp) > 0 {
+			mcpConfig = mergeWorkspaceAgentMcpConfig(json.RawMessage(wsMcp), mcpConfig)
+		}
 		resp.Agent = &TaskAgentData{
 			ID:            uuidToString(agent.ID),
 			Name:          agent.Name,

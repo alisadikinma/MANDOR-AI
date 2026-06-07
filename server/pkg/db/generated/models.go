@@ -773,6 +773,7 @@ type Workspace struct {
 	IssuePrefix  string             `json:"issue_prefix"`
 	IssueCounter int32              `json:"issue_counter"`
 	AvatarUrl    pgtype.Text        `json:"avatar_url"`
+	McpConfig    []byte             `json:"mcp_config"`
 }
 
 type WorkspaceInvitation struct {

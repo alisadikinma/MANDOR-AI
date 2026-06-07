@@ -14,7 +14,7 @@ import (
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspace (name, slug, description, context, issue_prefix)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, mcp_config
 `
 
 type CreateWorkspaceParams struct {
@@ -47,6 +47,7 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.IssuePrefix,
 		&i.IssueCounter,
 		&i.AvatarUrl,
+		&i.McpConfig,
 	)
 	return i, err
 }
@@ -61,7 +62,7 @@ func (q *Queries) DeleteWorkspace(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, mcp_config FROM workspace
 WHERE id = $1
 `
 
@@ -81,12 +82,13 @@ func (q *Queries) GetWorkspace(ctx context.Context, id pgtype.UUID) (Workspace, 
 		&i.IssuePrefix,
 		&i.IssueCounter,
 		&i.AvatarUrl,
+		&i.McpConfig,
 	)
 	return i, err
 }
 
 const getWorkspaceBySlug = `-- name: GetWorkspaceBySlug :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, mcp_config FROM workspace
 WHERE slug = $1
 `
 
@@ -106,8 +108,21 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 		&i.IssuePrefix,
 		&i.IssueCounter,
 		&i.AvatarUrl,
+		&i.McpConfig,
 	)
 	return i, err
+}
+
+const getWorkspaceMcpConfig = `-- name: GetWorkspaceMcpConfig :one
+SELECT mcp_config FROM workspace
+WHERE id = $1
+`
+
+func (q *Queries) GetWorkspaceMcpConfig(ctx context.Context, id pgtype.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceMcpConfig, id)
+	var mcp_config []byte
+	err := row.Scan(&mcp_config)
+	return mcp_config, err
 }
 
 const incrementIssueCounter = `-- name: IncrementIssueCounter :one
@@ -126,13 +141,18 @@ func (q *Queries) IncrementIssueCounter(ctx context.Context, id pgtype.UUID) (in
 const listWorkspaces = `-- name: ListWorkspaces :many
 SELECT w.id, w.name, w.slug, w.description, w.settings,
        w.created_at, w.updated_at, w.context, w.repos,
-       w.issue_prefix, w.issue_counter, w.avatar_url
+       w.issue_prefix, w.issue_counter, w.avatar_url, w.mcp_config
 FROM member m
 JOIN workspace w ON w.id = m.workspace_id
 WHERE m.user_id = $1
 ORDER BY w.created_at ASC
 `
 
+// mcp_config is selected only to keep this row type identical to db.Workspace
+// (sqlc emits a distinct row struct when the column list diverges from the
+// table). It carries secrets but is never serialized: workspaceToResponse
+// omits it, and the value is only read back via the owner/admin-gated
+// /mcp-config endpoints.
 func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Workspace, error) {
 	rows, err := q.db.Query(ctx, listWorkspaces, userID)
 	if err != nil {
@@ -155,6 +175,7 @@ func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Wor
 			&i.IssuePrefix,
 			&i.IssueCounter,
 			&i.AvatarUrl,
+			&i.McpConfig,
 		); err != nil {
 			return nil, err
 		}
@@ -177,7 +198,7 @@ UPDATE workspace SET
     avatar_url = COALESCE($8, avatar_url),
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, mcp_config
 `
 
 type UpdateWorkspaceParams struct {
@@ -216,6 +237,27 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.IssuePrefix,
 		&i.IssueCounter,
 		&i.AvatarUrl,
+		&i.McpConfig,
 	)
 	return i, err
+}
+
+const updateWorkspaceMcpConfig = `-- name: UpdateWorkspaceMcpConfig :one
+UPDATE workspace SET
+    mcp_config = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING mcp_config
+`
+
+type UpdateWorkspaceMcpConfigParams struct {
+	ID        pgtype.UUID `json:"id"`
+	McpConfig []byte      `json:"mcp_config"`
+}
+
+func (q *Queries) UpdateWorkspaceMcpConfig(ctx context.Context, arg UpdateWorkspaceMcpConfigParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, updateWorkspaceMcpConfig, arg.ID, arg.McpConfig)
+	var mcp_config []byte
+	err := row.Scan(&mcp_config)
+	return mcp_config, err
 }

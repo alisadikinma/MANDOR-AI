@@ -32,6 +32,16 @@ func TestRuntimeMcpConfig(t *testing.T) {
 			want: "",
 		},
 		{
+			name: "a disabled entry wins over an active one of the same name",
+			in:   `{"mcpServers":{"a":{"command":"x"},"b":{"command":"keep"}},"disabledMcpServers":{"a":{"command":"x"}}}`,
+			want: `{"mcpServers":{"b":{"command":"keep"}}}`,
+		},
+		{
+			name: "shadowing the only active server collapses to nil",
+			in:   `{"mcpServers":{"a":{"command":"x"}},"disabledMcpServers":{"a":{"command":"x"}}}`,
+			want: "",
+		},
+		{
 			name: "non-object passes through untouched",
 			in:   `"not-an-object"`,
 			want: `"not-an-object"`,

@@ -1,7 +1,12 @@
 -- name: ListWorkspaces :many
+-- mcp_config is selected only to keep this row type identical to db.Workspace
+-- (sqlc emits a distinct row struct when the column list diverges from the
+-- table). It carries secrets but is never serialized: workspaceToResponse
+-- omits it, and the value is only read back via the owner/admin-gated
+-- /mcp-config endpoints.
 SELECT w.id, w.name, w.slug, w.description, w.settings,
        w.created_at, w.updated_at, w.context, w.repos,
-       w.issue_prefix, w.issue_counter, w.avatar_url
+       w.issue_prefix, w.issue_counter, w.avatar_url, w.mcp_config
 FROM member m
 JOIN workspace w ON w.id = m.workspace_id
 WHERE m.user_id = $1
@@ -32,6 +37,17 @@ UPDATE workspace SET
     updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: GetWorkspaceMcpConfig :one
+SELECT mcp_config FROM workspace
+WHERE id = $1;
+
+-- name: UpdateWorkspaceMcpConfig :one
+UPDATE workspace SET
+    mcp_config = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING mcp_config;
 
 -- name: IncrementIssueCounter :one
 UPDATE workspace SET issue_counter = issue_counter + 1

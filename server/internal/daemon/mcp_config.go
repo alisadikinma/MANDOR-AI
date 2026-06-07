@@ -28,10 +28,33 @@ func runtimeMcpConfig(raw json.RawMessage) json.RawMessage {
 	if err := json.Unmarshal(raw, &obj); err != nil {
 		return raw
 	}
-	if _, ok := obj["disabledMcpServers"]; !ok {
+	disabledRaw, ok := obj["disabledMcpServers"]
+	if !ok {
 		return raw
 	}
 	delete(obj, "disabledMcpServers")
+
+	// A disabled entry wins over an active one of the same name. This matters
+	// after the workspace∪agent merge: a server the workspace enables can be
+	// disabled at the agent level, which re-appears in the merged `mcpServers`
+	// map — drop it so the disable actually takes effect.
+	var disabled map[string]json.RawMessage
+	if err := json.Unmarshal(disabledRaw, &disabled); err == nil && len(disabled) > 0 {
+		if activeRaw, ok := obj["mcpServers"]; ok {
+			var active map[string]json.RawMessage
+			if json.Unmarshal(activeRaw, &active) == nil {
+				for name := range disabled {
+					delete(active, name)
+				}
+				if len(active) == 0 {
+					delete(obj, "mcpServers")
+				} else if b, err := json.Marshal(active); err == nil {
+					obj["mcpServers"] = b
+				}
+			}
+		}
+	}
+
 	if len(obj) == 0 {
 		return nil
 	}
