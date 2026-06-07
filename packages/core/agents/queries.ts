@@ -101,6 +101,24 @@ export function agentTemplateListOptions() {
   });
 }
 
+// MCP connector directory — global curated catalog UNION the workspace's own
+// custom connectors. Keyed on wsId so switching workspace swaps the visible
+// custom rows automatically. Mutations (create custom connector) invalidate
+// this key on success.
+export const mcpConnectorKeys = {
+  all: (wsId: string) => ["workspaces", wsId, "mcp-connectors"] as const,
+  list: (wsId: string) => [...mcpConnectorKeys.all(wsId), "list"] as const,
+};
+
+export function mcpConnectorsOptions(wsId: string) {
+  return queryOptions({
+    queryKey: mcpConnectorKeys.list(wsId),
+    queryFn: () => api.listMcpConnectors(wsId),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
 export function agentTemplateDetailOptions(slug: string) {
   return queryOptions({
     queryKey: agentTemplateKeys.detail(slug),
