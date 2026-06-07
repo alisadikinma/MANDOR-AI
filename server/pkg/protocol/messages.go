@@ -111,6 +111,20 @@ type ChatSessionUpdatedPayload struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
+// McpProbeServerResult is one server's probe outcome (mirrors
+// mcpprobe.Result). Status is one of connected|failed|needs_auth|skipped.
+type McpProbeServerResult struct {
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	ToolCount int    `json:"tool_count"`
+	Error     string `json:"error,omitempty"`
+}
+
+// McpProbeResultPayload is the daemon→server HTTP report body for a probe.
+type McpProbeResultPayload struct {
+	Results []McpProbeServerResult `json:"results"`
+}
+
 // DaemonHeartbeatRequestPayload is sent from daemon to server over WebSocket
 // to update last_seen_at and pull pending actions for a single runtime.
 // Mirrors the body of POST /api/daemon/heartbeat so both transports share
@@ -143,6 +157,10 @@ type DaemonHeartbeatAckPayload struct {
 	// that don't know this field silently ignore it (standard JSON behavior)
 	// and fall back to the singular PendingLocalSkillImport above.
 	PendingLocalSkillImports []DaemonHeartbeatPendingLocalSkillImport `json:"pending_local_skill_imports,omitempty"`
+	// PendingMcpProbe asks the daemon to run an MCP connection handshake against
+	// the carried effective config and report per-server status back. Old
+	// daemons that don't know this field ignore it.
+	PendingMcpProbe *DaemonHeartbeatPendingMcpProbe `json:"pending_mcp_probe,omitempty"`
 }
 
 // HeartbeatStatusRuntimeGone is the ack Status used when the runtime row no
@@ -160,6 +178,15 @@ type DaemonHeartbeatPendingUpdate struct {
 // enumerate the runtime's supported models.
 type DaemonHeartbeatPendingModelList struct {
 	ID string `json:"id"`
+}
+
+// DaemonHeartbeatPendingMcpProbe describes an MCP connection-probe request.
+// Config is the effective (workspace∪agent) mcp_config, still carrying the
+// disabledMcpServers sidecar — the daemon applies its runtime strip before
+// probing so it tests exactly what a real task run would use.
+type DaemonHeartbeatPendingMcpProbe struct {
+	ID     string          `json:"id"`
+	Config json.RawMessage `json:"config"`
 }
 
 // DaemonHeartbeatPendingLocalSkills describes a request for the runtime's

@@ -18,7 +18,9 @@ import (
 	"github.com/multica-ai/multica/server/internal/cli"
 	"github.com/multica-ai/multica/server/internal/daemon/execenv"
 	"github.com/multica-ai/multica/server/internal/daemon/repocache"
+	"github.com/multica-ai/multica/server/internal/mcpprobe"
 	"github.com/multica-ai/multica/server/pkg/agent"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 	"github.com/multica-ai/multica/server/pkg/taskfailure"
 )
 
@@ -1407,6 +1409,9 @@ func (d *Daemon) handleHeartbeatActions(ctx context.Context, runtimeID string, r
 			go d.handleModelList(ctx, *rt, resp.PendingModelList.ID)
 		}
 	}
+	if resp.PendingMcpProbe != nil {
+		go d.handleMcpProbe(ctx, runtimeID, resp.PendingMcpProbe.ID, resp.PendingMcpProbe.Config)
+	}
 	if resp.PendingLocalSkills != nil {
 		if rt := d.findRuntime(runtimeID); rt != nil {
 			go d.handleLocalSkillList(ctx, *rt, resp.PendingLocalSkills.ID)
@@ -1423,6 +1428,39 @@ func (d *Daemon) handleHeartbeatActions(ctx context.Context, runtimeID string, r
 		if rt := d.findRuntime(runtimeID); rt != nil {
 			go d.handleLocalSkillImport(ctx, *rt, *resp.PendingLocalSkillImport)
 		}
+	}
+}
+
+// handleMcpProbe runs a real MCP connection handshake against the effective
+// config the server handed us — applying the same disabledMcpServers strip a
+// task run would, so it tests exactly what the runtime will use — and reports
+// per-server status back. A server that fails to connect is reported as a
+// per-server "failed" result, never as a request-level error: the UI wants to
+// show which servers connected and which didn't.
+func (d *Daemon) handleMcpProbe(ctx context.Context, runtimeID, requestID string, config json.RawMessage) {
+	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	results := mcpprobe.ProbeConfig(probeCtx, runtimeMcpConfig(config))
+
+	payload := protocol.McpProbeResultPayload{
+		Results: make([]protocol.McpProbeServerResult, 0, len(results)),
+	}
+	for _, res := range results {
+		payload.Results = append(payload.Results, protocol.McpProbeServerResult{
+			Name:      res.Name,
+			Status:    string(res.Status),
+			ToolCount: res.ToolCount,
+			Error:     res.Error,
+		})
+	}
+
+	// Report on a fresh context so a cancelled probe ctx doesn't also drop the
+	// result the UI is polling for.
+	reportCtx, cancelReport := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelReport()
+	if err := d.client.ReportMcpProbeResult(reportCtx, runtimeID, requestID, payload); err != nil {
+		d.logger.Warn("mcp probe: report failed", "runtime_id", runtimeID, "request_id", requestID, "error", err)
 	}
 }
 

@@ -287,6 +287,7 @@ type (
 	PendingModelList        = protocol.DaemonHeartbeatPendingModelList
 	PendingLocalSkills      = protocol.DaemonHeartbeatPendingLocalSkills
 	PendingLocalSkillImport = protocol.DaemonHeartbeatPendingLocalSkillImport
+	PendingMcpProbe         = protocol.DaemonHeartbeatPendingMcpProbe
 )
 
 func (c *Client) SendHeartbeat(ctx context.Context, runtimeID string) (*HeartbeatResponse, error) {
@@ -303,6 +304,11 @@ func (c *Client) SendHeartbeat(ctx context.Context, runtimeID string) (*Heartbea
 // ReportUpdateResult sends the CLI update result back to the server.
 func (c *Client) ReportUpdateResult(ctx context.Context, runtimeID, updateID string, result map[string]any) error {
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/update/%s/result", runtimeID, updateID), result, nil)
+}
+
+// ReportMcpProbeResult sends per-server MCP connection-probe results back.
+func (c *Client) ReportMcpProbeResult(ctx context.Context, runtimeID, requestID string, payload protocol.McpProbeResultPayload) error {
+	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/mcp-probe/%s/result", runtimeID, requestID), payload, nil)
 }
 
 // ReportModelListResult sends the model-discovery result back to the server.

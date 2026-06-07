@@ -750,6 +750,9 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if ack.PendingLocalSkillImport != nil {
 		resp["pending_local_skill_import"] = ack.PendingLocalSkillImport
 	}
+	if ack.PendingMcpProbe != nil {
+		resp["pending_mcp_probe"] = ack.PendingMcpProbe
+	}
 	if len(ack.PendingLocalSkillImports) > 0 {
 		resp["pending_local_skill_imports"] = ack.PendingLocalSkillImports
 	}
@@ -915,6 +918,18 @@ func (h *Handler) processHeartbeat(ctx context.Context, rt db.AgentRuntime, supp
 			slog.Warn("model list HasPending timed out", "runtime_id", runtimeID, "elapsed_ms", m.ProbeModelMs)
 		} else {
 			slog.Warn("model list HasPending failed", "error", probeModelErr, "runtime_id", runtimeID)
+		}
+	}
+
+	// Claim any pending MCP connection probe for this runtime. The store is
+	// in-memory and cheap, so (unlike the model/skill queues) no bounded probe
+	// is needed before the pop.
+	if h.McpProbeStore != nil && h.McpProbeStore.HasPending(runtimeID) {
+		if pendingProbe := h.McpProbeStore.PopPending(runtimeID); pendingProbe != nil {
+			ack.PendingMcpProbe = &protocol.DaemonHeartbeatPendingMcpProbe{
+				ID:     pendingProbe.ID,
+				Config: pendingProbe.Config,
+			}
 		}
 	}
 

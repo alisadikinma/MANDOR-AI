@@ -492,6 +492,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		r.Post("/runtimes/{runtimeId}/models/{requestId}/result", h.ReportModelListResult)
 		r.Post("/runtimes/{runtimeId}/local-skills/{requestId}/result", h.ReportLocalSkillListResult)
 		r.Post("/runtimes/{runtimeId}/local-skills/import/{requestId}/result", h.ReportLocalSkillImportResult)
+		r.Post("/runtimes/{runtimeId}/mcp-probe/{requestId}/result", h.ReportMcpProbeResult)
 
 		r.Get("/tasks/{taskId}/status", h.GetTaskStatus)
 		r.Post("/tasks/{taskId}/start", h.StartTask)
@@ -561,6 +562,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// only, like the agent mcp_config read gate.
 					r.Get("/mcp-config", h.GetWorkspaceMcpConfig)
 					r.Put("/mcp-config", h.UpdateWorkspaceMcpConfig)
+					r.Post("/mcp/probe", h.InitiateWorkspaceMcpProbe)
 					r.Post("/members", h.CreateInvitation)
 					r.Route("/members/{memberId}", func(r chi.Router) {
 						r.Patch("/", h.UpdateMember)
@@ -831,8 +833,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// internal/handler/agent_env.go.
 					r.Get("/env", h.GetAgentEnv)
 					r.Put("/env", h.UpdateAgentEnv)
+					// MCP connection probe: enqueue a real handshake of the
+					// agent's effective MCP config on its runtime. Gated to
+					// secret-viewers in the handler.
+					r.Post("/mcp/probe", h.InitiateAgentMcpProbe)
 				})
 			})
+
+			// MCP connection probe status (workspace-member gated in handler).
+			// Both the agent and workspace probe POSTs return a request whose
+			// id is polled here until it reaches a terminal state.
+			r.Get("/api/mcp-probe/{requestId}", h.GetMcpProbeRequest)
 
 			// Agent templates catalog (browse + detail). The Create flow
 			// lives under /api/agents/from-template above; this route is for
