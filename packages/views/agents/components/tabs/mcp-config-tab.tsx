@@ -10,6 +10,31 @@ import { useT } from "../../../i18n";
 import { ConnectorDirectory } from "../mcp/connector-directory";
 import { ConnectorConfigForm } from "../mcp/connector-config-form";
 import { CustomConnectorEntry } from "../mcp/custom-connector-form";
+import {
+  InstalledConnectorList,
+  extractInstalledServers,
+} from "../mcp/installed-connector-list";
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Returns a copy of `config` with the named `mcpServers` entry removed. When the
+ * last server goes and nothing else remains, collapses to `null` so the daemon
+ * falls back to the CLI default rather than persisting an empty husk.
+ */
+function removeServerFromConfig(config: unknown, name: string): unknown | null {
+  if (!isPlainObject(config)) return config ?? null;
+  const servers = isPlainObject(config.mcpServers) ? { ...config.mcpServers } : {};
+  delete servers[name];
+  const rest = { ...config };
+  delete rest.mcpServers;
+  if (Object.keys(servers).length === 0) {
+    return Object.keys(rest).length === 0 ? null : rest;
+  }
+  return { ...rest, mcpServers: servers };
+}
 
 // `null` and the empty string are the two ways the user can mean "no
 // config" — the server stores either as a NULL column and the daemon
@@ -137,6 +162,29 @@ export function McpConfigTab({
     setText("");
   };
 
+  // The installed list mirrors the *saved* config (the add flow persists
+  // immediately, so it stays current). Removal therefore acts on
+  // `agent.mcp_config`, not the editor draft — that keeps the JSON textarea a
+  // separate "advanced" surface whose unsaved edits a remove won't clobber.
+  const installedServers = useMemo(
+    () => extractInstalledServers(agent.mcp_config),
+    [agent.mcp_config],
+  );
+
+  const handleRemoveServer = async (name: string) => {
+    const next = removeServerFromConfig(agent.mcp_config, name);
+    try {
+      await onSave({ mcp_config: next });
+      toast.success(t(($) => $.tab_body.mcp_config.saved_toast));
+    } catch (err) {
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : t(($) => $.tab_body.mcp_config.save_failed_toast),
+      );
+    }
+  };
+
   const showInvalid = trimmed !== "" && !parseResult.ok;
   const invalidMessage = !parseResult.ok && parseResult.error === "mcp_config_not_object"
     ? t(($) => $.tab_body.mcp_config.invalid_not_object)
@@ -184,6 +232,11 @@ export function McpConfigTab({
           onSave={onSave}
         />
       )}
+
+      <InstalledConnectorList
+        servers={installedServers}
+        onRemove={handleRemoveServer}
+      />
 
       <div className="flex items-center justify-between gap-3 pt-1">
         <p className="text-xs font-medium text-muted-foreground">
