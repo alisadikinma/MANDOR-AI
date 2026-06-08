@@ -51,8 +51,11 @@ type Result struct {
 }
 
 // defaultPerServerTimeout bounds a single server probe. Callers may pass a
-// shorter context deadline; whichever fires first wins.
-const defaultPerServerTimeout = 8 * time.Second
+// shorter context deadline; whichever fires first wins. Sized to cover a cold
+// `npx -y` stdio server (registry resolution + node startup measured at ~15s),
+// the most common MCP transport; an 8s cap reported correct configs as failed.
+// Kept consistent with the server-side running timeout and the UI poll ceiling.
+const defaultPerServerTimeout = 20 * time.Second
 
 // serverEntry is the subset of an `mcpServers` entry the prober understands.
 // Unknown fields are ignored. Both Claude-style (`type`) and OpenClaw-style
@@ -234,6 +237,9 @@ func probeStdio(ctx context.Context, name string, entry serverEntry) Result {
 	// Read until the initialize (id:1) response, ignoring log lines / non-JSON
 	// chatter some servers emit on stdout.
 	if _, ok := awaitResponse(ctx, lines, "1"); !ok {
+		if ctx.Err() == context.DeadlineExceeded {
+			return Result{Name: name, Status: StatusFailed, Error: "server did not respond before timeout — slow start (e.g. cold npx); try again"}
+		}
 		return Result{Name: name, Status: StatusFailed, Error: "no initialize response"}
 	}
 

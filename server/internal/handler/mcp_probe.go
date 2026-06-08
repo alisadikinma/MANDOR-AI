@@ -52,7 +52,11 @@ type McpProbeRequest struct {
 
 const (
 	mcpProbePendingTimeout = 30 * time.Second
-	mcpProbeRunningTimeout = 30 * time.Second
+	// Must stay above the daemon's per-server probe cap (mcpprobe
+	// defaultPerServerTimeout, 20s) plus report round-trip, so the server never
+	// declares a false timeout while a slow (e.g. cold npx) probe is still
+	// running. Kept below the UI poll ceiling so the UI sees the real outcome.
+	mcpProbeRunningTimeout = 40 * time.Second
 	mcpProbeRetention      = 3 * time.Minute
 )
 

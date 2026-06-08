@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -63,6 +64,23 @@ func TestProbeStdioNoInitializeResponse(t *testing.T) {
 	got := probeOne(c, "chatty", raw)
 	if got.Status != StatusFailed {
 		t.Fatalf("status = %q, want failed", got.Status)
+	}
+}
+
+func TestProbeStdioDeadlineExceeded(t *testing.T) {
+	requireSh(t)
+	// A server that stays alive but never answers, so the per-server context
+	// deadline (not a closed stream) is what ends the wait — the slow-start case
+	// a cold `npx` hits. The error must say so, not "no initialize response".
+	raw := json.RawMessage(`{"command":"sh","args":["-c","sleep 5"]}`)
+	c, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	got := probeOne(c, "slow", raw)
+	if got.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", got.Status)
+	}
+	if !strings.Contains(got.Error, "did not respond before timeout") {
+		t.Fatalf("error = %q, want the slow-start/deadline message", got.Error)
 	}
 }
 

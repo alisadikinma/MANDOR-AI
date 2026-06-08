@@ -18,7 +18,7 @@ import { removeServerFromConfig, setServerEnabled } from "./config-mutations";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const PROBE_POLL_INTERVAL_MS = 1500;
-const PROBE_POLL_ATTEMPTS = 20; // ~30s ceiling, comfortably past the 15s heartbeat
+const PROBE_POLL_ATTEMPTS = 30; // ~45s ceiling: covers the ≤15s heartbeat pickup + a 20s cold-npx probe
 
 /**
  * The shared MCP-server management surface used by BOTH the per-agent tab and
