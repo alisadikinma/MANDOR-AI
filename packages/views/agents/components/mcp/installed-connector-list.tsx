@@ -83,6 +83,7 @@ export function InstalledConnectorList({
   inherited,
   liveStatus,
   probing,
+  onAuthenticate,
   onRemove,
   onToggle,
 }: {
@@ -99,6 +100,9 @@ export function InstalledConnectorList({
   liveStatus?: LiveStatusMap | null;
   /** True while a probe is in flight — rows show a "Checking…" pill. */
   probing?: boolean;
+  /** Starts OAuth for a `needs_auth` server (opens a popup, re-probes on
+   *  success). Omit to fall back to the runtime-CLI sign-in hint. */
+  onAuthenticate?: (name: string) => Promise<void> | void;
   onRemove: (name: string) => Promise<void> | void;
   onToggle: (name: string, enabled: boolean) => Promise<void> | void;
 }) {
@@ -114,6 +118,7 @@ export function InstalledConnectorList({
         server={active}
         live={liveStatus?.[active.name]}
         probing={probing}
+        onAuthenticate={onAuthenticate}
         onBack={() => setSelected(null)}
         onRemove={async (name) => {
           await onRemove(name);
@@ -304,6 +309,7 @@ function ServerDetail({
   server,
   live,
   probing,
+  onAuthenticate,
   onBack,
   onRemove,
   onToggle,
@@ -311,11 +317,13 @@ function ServerDetail({
   server: InstalledServer;
   live?: McpProbeServerResult;
   probing?: boolean;
+  onAuthenticate?: (name: string) => Promise<void> | void;
   onBack: () => void;
   onRemove: (name: string) => Promise<void> | void;
   onToggle: (name: string, enabled: boolean) => Promise<void> | void;
 }) {
   const [busy, setBusy] = useState<"toggle" | "remove" | null>(null);
+  const [authing, setAuthing] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   const run = async (
@@ -354,6 +362,41 @@ function ServerDetail({
           {live.error}
         </p>
       )}
+
+      {live?.status === "needs_auth" &&
+        (onAuthenticate ? (
+          <div className="space-y-1.5 rounded bg-muted/40 px-2 py-2">
+            <p className="text-xs text-muted-foreground">
+              This server needs sign-in. Authenticate once and it connects for
+              everyone in this workspace.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              disabled={authing}
+              onClick={async () => {
+                setAuthing(true);
+                try {
+                  await onAuthenticate(server.name);
+                } finally {
+                  setAuthing(false);
+                }
+              }}
+            >
+              {authing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : null}
+              Authenticate
+            </Button>
+          </div>
+        ) : (
+          <p className="rounded bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+            Sign-in happens on the runtime, not here. Authenticate once on the
+            runtime host with the agent&apos;s CLI (e.g. run{" "}
+            <code className="font-mono">claude</code> there and complete the
+            sign-in), then re-test.
+          </p>
+        ))}
 
       {server.summary && (
         <div className="space-y-1">

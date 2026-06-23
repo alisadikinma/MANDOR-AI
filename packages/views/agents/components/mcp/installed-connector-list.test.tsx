@@ -228,6 +228,47 @@ describe("InstalledConnectorList", () => {
     expect(onRemove).toHaveBeenCalledWith("obsidian");
   });
 
+  it("offers an Authenticate button for a needs_auth server when onAuthenticate is set", async () => {
+    const user = userEvent.setup();
+    const onAuthenticate = vi.fn();
+    render(
+      <InstalledConnectorList
+        servers={[{ name: "figma", summary: "", enabled: true }]}
+        liveStatus={{
+          figma: { name: "figma", status: "needs_auth", tool_count: 0 },
+        }}
+        onAuthenticate={onAuthenticate}
+        onRemove={noop}
+        onToggle={noop}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /manage figma/i }));
+    const authBtn = screen.getByRole("button", { name: "Authenticate" });
+    await user.click(authBtn);
+    expect(onAuthenticate).toHaveBeenCalledWith("figma");
+    // The CLI fallback hint must NOT show when the in-app flow is available.
+    expect(screen.queryByText(/run on the runtime host/i)).not.toBeInTheDocument();
+  });
+
+  it("falls back to the runtime-CLI hint when onAuthenticate is absent", async () => {
+    const user = userEvent.setup();
+    render(
+      <InstalledConnectorList
+        servers={[{ name: "figma", summary: "", enabled: true }]}
+        liveStatus={{
+          figma: { name: "figma", status: "needs_auth", tool_count: 0 },
+        }}
+        onRemove={noop}
+        onToggle={noop}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /manage figma/i }));
+    expect(
+      screen.queryByRole("button", { name: "Authenticate" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/sign-in happens on the runtime/i)).toBeInTheDocument();
+  });
+
   it("cancel dismisses the remove confirm without removing", async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();

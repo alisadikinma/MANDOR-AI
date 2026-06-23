@@ -78,6 +78,9 @@ export function McpConfigTab({
         config={agent.mcp_config}
         onSave={(next) => onSave({ mcp_config: next })}
         onProbe={() => api.probeAgentMcp(agent.id)}
+        onAuthenticate={(server) =>
+          api.startMcpOauth(agent.id, server, window.location.origin)
+        }
         inheritedServers={inheritedServers}
         savedToast={t(($) => $.tab_body.mcp_config.saved_toast)}
         saveFailedToast={t(($) => $.tab_body.mcp_config.save_failed_toast)}

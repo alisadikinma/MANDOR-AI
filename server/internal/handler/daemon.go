@@ -1153,6 +1153,9 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		if wsMcp, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), agent.WorkspaceID); err == nil && len(wsMcp) > 0 {
 			mcpConfig = mergeWorkspaceAgentMcpConfig(json.RawMessage(wsMcp), mcpConfig)
 		}
+		// Inject Bearer headers for any MCP server the workspace has an in-app
+		// OAuth token for, so the runtime connects without doing its own OAuth.
+		mcpConfig = h.injectMcpOauthHeaders(r.Context(), agent.WorkspaceID, mcpConfig)
 		resp.Agent = &TaskAgentData{
 			ID:            uuidToString(agent.ID),
 			Name:          agent.Name,

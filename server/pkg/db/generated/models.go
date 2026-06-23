@@ -500,6 +500,22 @@ type McpConnector struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type McpOauthToken struct {
+	ID                  pgtype.UUID        `json:"id"`
+	WorkspaceID         pgtype.UUID        `json:"workspace_id"`
+	Resource            string             `json:"resource"`
+	AuthorizationServer string             `json:"authorization_server"`
+	Scope               string             `json:"scope"`
+	ClientID            string             `json:"client_id"`
+	ClientSecretEnc     []byte             `json:"client_secret_enc"`
+	AccessTokenEnc      []byte             `json:"access_token_enc"`
+	RefreshTokenEnc     []byte             `json:"refresh_token_enc"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+	CreatedBy           pgtype.UUID        `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Member struct {
 	ID          pgtype.UUID        `json:"id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`

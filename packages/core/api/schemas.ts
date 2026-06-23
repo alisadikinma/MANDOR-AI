@@ -961,3 +961,13 @@ export const McpProbeRequestSchema = z
 // Fallback is a terminal state so a malformed body ends the UI's poll loop
 // (rather than spinning forever) and surfaces as "test failed".
 export const EMPTY_MCP_PROBE_REQUEST: { status: string } = { status: "timeout" };
+
+// Response of POST /api/agents/{id}/mcp/oauth/start: the URL the FE opens in a
+// popup to let the user sign in. Empty fallback => "couldn't start auth".
+export const McpOauthStartSchema = z
+  .object({ authorize_url: z.string().default("") })
+  .loose();
+
+export const EMPTY_MCP_OAUTH_START: { authorize_url: string } = {
+  authorize_url: "",
+};

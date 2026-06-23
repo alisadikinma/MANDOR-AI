@@ -68,3 +68,6 @@ server/server
 data/
 .kilo
 .idea
+
+# Playwright CLI debug dumps
+.playwright-cli/

@@ -347,6 +347,22 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	} else {
 		slog.Info("lark integration disabled (MULTICA_LARK_SECRET_KEY not set)")
 	}
+
+	// MCP OAuth at-rest key: seals the OAuth tokens MANDOR obtains on the
+	// user's behalf for remote MCP servers (Figma, GitHub, …) via the in-app
+	// "Authenticate" flow. When unset the oauth start/callback handlers return
+	// 400 with a clear message; the rest of the server starts normally.
+	if mcpKey, err := secretbox.LoadKey("MULTICA_MCP_SECRET_KEY"); err == nil {
+		if box, err := secretbox.New(mcpKey); err != nil {
+			slog.Error("mcp oauth: secretbox.New failed; in-app MCP OAuth disabled", "error", err)
+		} else {
+			h.McpOAuthBox = box
+			slog.Info("mcp oauth enabled")
+		}
+	} else {
+		slog.Info("mcp oauth disabled (MULTICA_MCP_SECRET_KEY not set)")
+	}
+
 	if opts.HeartbeatScheduler != nil {
 		h.HeartbeatScheduler = opts.HeartbeatScheduler
 	}
@@ -837,6 +853,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// agent's effective MCP config on its runtime. Gated to
 					// secret-viewers in the handler.
 					r.Post("/mcp/probe", h.InitiateAgentMcpProbe)
+					// Begin an in-app OAuth authorization for one remote MCP
+					// server in the agent's effective config. Gated to
+					// secret-viewers in the handler; returns an authorize_url.
+					r.Post("/mcp/oauth/start", h.InitiateMcpOauth)
 				})
 			})
 
@@ -844,6 +864,14 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			// Both the agent and workspace probe POSTs return a request whose
 			// id is polled here until it reaches a terminal state.
 			r.Get("/api/mcp-probe/{requestId}", h.GetMcpProbeRequest)
+
+			// MCP OAuth redirect target. The provider redirects the browser
+			// here (via the FE proxy, so the session cookie rides along); it
+			// redeems the code and returns a popup-closing page. Requires an
+			// authenticated session (this group applies Auth); the single-use
+			// state additionally binds the callback to the flow that
+			// /mcp/oauth/start created — keep this route inside the auth group.
+			r.Get("/api/mcp/oauth/callback", h.CompleteMcpOauth)
 
 			// Agent templates catalog (browse + detail). The Create flow
 			// lives under /api/agents/from-template above; this route is for

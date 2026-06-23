@@ -211,6 +211,7 @@ func (h *Handler) InitiateAgentMcpProbe(w http.ResponseWriter, r *http.Request) 
 		workspaceCfg = json.RawMessage(raw)
 	}
 	effective := mergeWorkspaceAgentMcpConfig(workspaceCfg, agent.McpConfig)
+	effective = h.injectMcpOauthHeaders(r.Context(), agent.WorkspaceID, effective)
 
 	req := h.McpProbeStore.Create(runtimeID, uuidToString(agent.WorkspaceID), effective)
 	writeJSON(w, http.StatusOK, req)
@@ -247,6 +248,7 @@ func (h *Handler) InitiateWorkspaceMcpProbe(w http.ResponseWriter, r *http.Reque
 	if raw, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), wsUUID); err == nil && len(raw) > 0 {
 		cfg = json.RawMessage(raw)
 	}
+	cfg = h.injectMcpOauthHeaders(r.Context(), wsUUID, cfg)
 	req := h.McpProbeStore.Create(runtimeID, wsID, cfg)
 	writeJSON(w, http.StatusOK, req)
 }

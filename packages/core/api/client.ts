@@ -197,6 +197,8 @@ import {
   WorkspaceMcpConfigSchema,
   EMPTY_WORKSPACE_MCP_CONFIG,
   McpProbeRequestSchema,
+  McpOauthStartSchema,
+  EMPTY_MCP_OAUTH_START,
   EMPTY_MCP_PROBE_REQUEST,
 } from "./schemas";
 
@@ -864,6 +866,25 @@ export class ApiClient {
     const raw = await this.fetch<unknown>(`/api/mcp-probe/${requestId}`);
     return parseWithFallback(raw, McpProbeRequestSchema, EMPTY_MCP_PROBE_REQUEST, {
       endpoint: "GET /api/mcp-probe/{id}",
+    });
+  }
+
+  // Starts an in-app OAuth authorization for one remote MCP server in an
+  // agent's config. Returns the authorize URL for the caller to open in a
+  // popup; the server's redirect lands on /api/mcp/oauth/callback, which seals
+  // the token and posts the result back to the opener. `origin` is the browser
+  // origin used to build the redirect URI (the OAuth round-trip returns there).
+  async startMcpOauth(
+    agentId: string,
+    server: string,
+    origin: string,
+  ): Promise<{ authorize_url: string }> {
+    const raw = await this.fetch<unknown>(
+      `/api/agents/${agentId}/mcp/oauth/start`,
+      { method: "POST", body: JSON.stringify({ server, origin }) },
+    );
+    return parseWithFallback(raw, McpOauthStartSchema, EMPTY_MCP_OAUTH_START, {
+      endpoint: "POST /api/agents/{id}/mcp/oauth/start",
     });
   }
 

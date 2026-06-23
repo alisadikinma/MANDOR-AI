@@ -19,6 +19,40 @@ import { removeServerFromConfig, setServerEnabled } from "./config-mutations";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const PROBE_POLL_INTERVAL_MS = 1500;
 const PROBE_POLL_ATTEMPTS = 30; // ~45s ceiling: covers the ≤15s heartbeat pickup + a 20s cold-npx probe
+const OAUTH_RESULT_TIMEOUT_MS = 5 * 60 * 1000; // matches the backend flow TTL
+
+/**
+ * Waits for the OAuth popup to report back. The callback page posts a
+ * `mcp-oauth-result` message from OUR origin (it's served through the FE proxy),
+ * so we hard-check `event.origin` — a frame on any other origin is ignored,
+ * even though the payload itself carries no secret. Resolves false if the user
+ * closes the popup or the flow exceeds the TTL.
+ */
+function waitForOAuthResult(popup: Window | null): Promise<boolean> {
+  return new Promise((resolve) => {
+    const expectedOrigin = window.location.origin;
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      clearInterval(poll);
+      window.removeEventListener("message", onMsg);
+      resolve(ok);
+    };
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== expectedOrigin) return;
+      const d = e.data as { type?: string; success?: boolean } | null;
+      if (!d || d.type !== "mcp-oauth-result") return;
+      finish(d.success === true);
+    };
+    window.addEventListener("message", onMsg);
+    const poll = setInterval(() => {
+      if (popup && popup.closed) finish(false);
+    }, 800);
+    const timer = setTimeout(() => finish(false), OAUTH_RESULT_TIMEOUT_MS);
+  });
+}
 
 /**
  * The shared MCP-server management surface used by BOTH the per-agent tab and
@@ -35,6 +69,7 @@ export function McpServerManager({
   config,
   onSave,
   onProbe,
+  onAuthenticate,
   inheritedServers,
   savedToast,
   saveFailedToast,
@@ -47,6 +82,10 @@ export function McpServerManager({
   /** Kicks off a connection probe; returns the pending request (or a
    *  runtime_offline status). Omit to hide the Test-connections action. */
   onProbe?: () => Promise<{ id?: string; status: string }>;
+  /** Starts an OAuth authorization for a `needs_auth` server, returning the
+   *  authorize URL to open. Omit to hide the Authenticate action (e.g. the
+   *  workspace tab, which has no agent to scope the start call to). */
+  onAuthenticate?: (server: string) => Promise<{ authorize_url: string }>;
   inheritedServers?: InstalledServer[];
   savedToast: string;
   saveFailedToast: string;
@@ -125,6 +164,44 @@ export function McpServerManager({
     }
   };
 
+  const handleAuthenticate = async (server: string) => {
+    if (!onAuthenticate) return;
+    // Open the popup synchronously (still within the click gesture) so the
+    // browser doesn't block it while we fetch the authorize URL.
+    const popup = window.open("", "mcp-oauth", "width=600,height=760");
+    try {
+      const { authorize_url } = await onAuthenticate(server);
+      if (!authorize_url) {
+        popup?.close();
+        toast.error("Couldn't start authentication for this server.");
+        return;
+      }
+      if (popup && !popup.closed) {
+        popup.location.href = authorize_url;
+      } else {
+        // Popup was blocked — fall back to a new tab.
+        window.open(authorize_url, "_blank", "noopener");
+      }
+      const ok = await waitForOAuthResult(popup);
+      if (!mounted.current) return;
+      if (!ok) {
+        toast.error("Authentication was cancelled or timed out.");
+        return;
+      }
+      toast.success("Authenticated — re-testing connection…");
+      await handleProbe();
+    } catch (err) {
+      popup?.close();
+      if (mounted.current) {
+        toast.error(
+          err instanceof Error && err.message
+            ? err.message
+            : "Authentication failed",
+        );
+      }
+    }
+  };
+
   return (
     <div className="flex h-full flex-col space-y-3">
       <div className="flex justify-end gap-2">
@@ -187,6 +264,7 @@ export function McpServerManager({
         inherited={inheritedServers}
         liveStatus={liveStatus}
         probing={probing}
+        onAuthenticate={onAuthenticate ? handleAuthenticate : undefined}
         onRemove={(name) => persist(removeServerFromConfig(config, name))}
         onToggle={(name, enabled) =>
           persist(setServerEnabled(config, name, enabled))
