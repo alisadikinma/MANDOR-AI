@@ -50,6 +50,28 @@ url = "https://figma.example/mcp"
 	}
 }
 
+func TestResolveMachineMcpServersIncludesURLForHTTP(t *testing.T) {
+	dir := t.TempDir()
+	cfg := `{"mcpServers":{"figma":{"url":"https://figma.example/mcp"},"gh":{"command":"npx"}}}`
+	if err := os.WriteFile(filepath.Join(dir, ".claude.json"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ResolveMachineMcpServers("claude", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	byName := map[string]protocol.McpServerInfo{}
+	for _, s := range got {
+		byName[s.Name] = s
+	}
+	if byName["figma"].URL != "https://figma.example/mcp" {
+		t.Fatalf("http server should carry its URL, got %q", byName["figma"].URL)
+	}
+	if byName["gh"].URL != "" {
+		t.Fatalf("stdio server must not carry a URL, got %q", byName["gh"].URL)
+	}
+}
+
 func TestResolveMachineMcpServersClaude(t *testing.T) {
 	dir := t.TempDir()
 	cfg := `{

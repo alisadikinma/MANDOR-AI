@@ -79,11 +79,20 @@ type mcpEntry struct {
 	ServerURL string `json:"serverUrl"`
 }
 
+func (e mcpEntry) url() string {
+	for _, u := range []string{e.URL, e.HTTPURL, e.ServerURL} {
+		if strings.TrimSpace(u) != "" {
+			return strings.TrimSpace(u)
+		}
+	}
+	return ""
+}
+
 func (e mcpEntry) transport() string {
 	switch {
 	case strings.TrimSpace(e.Command) != "":
 		return "stdio"
-	case strings.TrimSpace(e.URL) != "", strings.TrimSpace(e.HTTPURL) != "", strings.TrimSpace(e.ServerURL) != "":
+	case e.url() != "":
 		return "http"
 	default:
 		return "stdio"
@@ -98,7 +107,8 @@ func toServerInfos(entries map[string]mcpEntry) []protocol.McpServerInfo {
 	sort.Strings(names)
 	out := make([]protocol.McpServerInfo, 0, len(names))
 	for _, name := range names {
-		out = append(out, protocol.McpServerInfo{Name: name, Transport: entries[name].transport()})
+		e := entries[name]
+		out = append(out, protocol.McpServerInfo{Name: name, Transport: e.transport(), URL: e.url()})
 	}
 	return out
 }

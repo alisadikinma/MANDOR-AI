@@ -21,12 +21,12 @@ func testBox(t *testing.T) *secretbox.Box {
 	return box
 }
 
-func TestInitiateMcpOauthNotConfigured(t *testing.T) {
-	// McpOAuthBox nil → 400 before any DB / agent load.
+func TestInitiateRuntimeMcpOauthNotConfigured(t *testing.T) {
+	// McpOAuthBox nil → 400 before any DB / runtime load.
 	h := &Handler{}
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/x/mcp/oauth/start", strings.NewReader(`{"server":"figma","origin":"http://localhost:3000"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/runtimes/x/mcp/oauth/start", strings.NewReader(`{"server":"figma","origin":"http://localhost:3000"}`))
 	w := httptest.NewRecorder()
-	h.InitiateMcpOauth(w, req)
+	h.InitiateRuntimeMcpOauth(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
 	}

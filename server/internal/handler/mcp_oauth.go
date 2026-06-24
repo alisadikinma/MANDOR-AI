@@ -13,6 +13,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/mcpoauth"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 // ---------------------------------------------------------------------------
@@ -43,22 +44,50 @@ type startMcpOauthRequest struct {
 	Origin string `json:"origin"`
 }
 
-// InitiateMcpOauth begins an OAuth authorization for one MCP server in an
-// agent's effective config. Gated to callers allowed to see the agent's
-// secrets. Returns the authorize URL for the FE to open in a popup.
-func (h *Handler) InitiateMcpOauth(w http.ResponseWriter, r *http.Request) {
+// runtimePoolServerURL resolves a server's remote endpoint from a runtime's
+// reported MCP pool (reported_mcp_servers JSON). Empty for stdio or unknown
+// servers — only remote http servers are OAuth-capable.
+func runtimePoolServerURL(reportedPool []byte, name string) string {
+	if len(reportedPool) == 0 {
+		return ""
+	}
+	var pool []protocol.McpServerInfo
+	if err := json.Unmarshal(reportedPool, &pool); err != nil {
+		return ""
+	}
+	for _, s := range pool {
+		if s.Name == name {
+			return strings.TrimSpace(s.URL)
+		}
+	}
+	return ""
+}
+
+// InitiateRuntimeMcpOauth begins an OAuth authorization for one server in a
+// runtime's machine MCP pool. The issued token is stored per (workspace,
+// resource), so every agent on the runtime reuses it. Gated to workspace
+// owner/admin (it writes a shared credential). Returns the authorize URL for
+// the FE to open in a popup.
+func (h *Handler) InitiateRuntimeMcpOauth(w http.ResponseWriter, r *http.Request) {
 	if h.McpOAuthBox == nil {
 		writeError(w, http.StatusBadRequest, "MCP OAuth is not configured on this server (set MULTICA_MCP_SECRET_KEY)")
 		return
 	}
-	id := chi.URLParam(r, "id")
-	agent, ok := h.loadAgentForUser(w, r, id)
+	runtimeUUID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "runtimeId"), "runtimeId")
 	if !ok {
 		return
 	}
-	member, ok := ctxMember(r.Context())
-	if !ok || !canViewAgentSecrets(agent, requestUserID(r), member.Role) {
-		writeError(w, http.StatusForbidden, "you are not allowed to authenticate this agent's MCP servers")
+	rt, err := h.Queries.GetAgentRuntime(r.Context(), runtimeUUID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "runtime not found")
+		return
+	}
+	member, ok := h.requireWorkspaceMember(w, r, uuidToString(rt.WorkspaceID), "runtime not found")
+	if !ok {
+		return
+	}
+	if !roleAllowed(member.Role, "owner", "admin") {
+		writeError(w, http.StatusForbidden, "you are not allowed to authenticate this runtime's MCP servers")
 		return
 	}
 
@@ -78,12 +107,7 @@ func (h *Handler) InitiateMcpOauth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var workspaceCfg json.RawMessage
-	if raw, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), agent.WorkspaceID); err == nil && len(raw) > 0 {
-		workspaceCfg = json.RawMessage(raw)
-	}
-	effective := mergeWorkspaceAgentMcpConfig(workspaceCfg, agent.McpConfig)
-	resourceURL := mcpServerURL(effective, body.Server)
+	resourceURL := runtimePoolServerURL(rt.ReportedMcpServers, body.Server)
 	if resourceURL == "" {
 		writeError(w, http.StatusBadRequest, "server has no URL to authenticate (only remote http MCP servers support OAuth)")
 		return
@@ -114,7 +138,7 @@ func (h *Handler) InitiateMcpOauth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.McpOAuthFlows.Put(state, mcpoauth.Flow{
-		WorkspaceID: uuidToString(agent.WorkspaceID),
+		WorkspaceID: uuidToString(rt.WorkspaceID),
 		Resource:    resourceURL,
 		RedirectURI: redirectURI,
 		CreatedBy:   requestUserID(r),
@@ -231,14 +255,21 @@ func (h *Handler) SetMcpAccessToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "MCP token storage is not configured on this server (set MULTICA_MCP_SECRET_KEY)")
 		return
 	}
-	id := chi.URLParam(r, "id")
-	agent, ok := h.loadAgentForUser(w, r, id)
+	runtimeUUID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "runtimeId"), "runtimeId")
 	if !ok {
 		return
 	}
-	member, ok := ctxMember(r.Context())
-	if !ok || !canViewAgentSecrets(agent, requestUserID(r), member.Role) {
-		writeError(w, http.StatusForbidden, "you are not allowed to set tokens for this agent's MCP servers")
+	rt, err := h.Queries.GetAgentRuntime(r.Context(), runtimeUUID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "runtime not found")
+		return
+	}
+	member, ok := h.requireWorkspaceMember(w, r, uuidToString(rt.WorkspaceID), "runtime not found")
+	if !ok {
+		return
+	}
+	if !roleAllowed(member.Role, "owner", "admin") {
+		writeError(w, http.StatusForbidden, "you are not allowed to set tokens for this runtime's MCP servers")
 		return
 	}
 
@@ -254,12 +285,7 @@ func (h *Handler) SetMcpAccessToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var workspaceCfg json.RawMessage
-	if raw, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), agent.WorkspaceID); err == nil && len(raw) > 0 {
-		workspaceCfg = json.RawMessage(raw)
-	}
-	effective := mergeWorkspaceAgentMcpConfig(workspaceCfg, agent.McpConfig)
-	resourceURL := mcpServerURL(effective, body.Server)
+	resourceURL := runtimePoolServerURL(rt.ReportedMcpServers, body.Server)
 	if resourceURL == "" {
 		writeError(w, http.StatusBadRequest, "server has no URL (only remote http MCP servers accept an access token)")
 		return
@@ -273,7 +299,7 @@ func (h *Handler) SetMcpAccessToken(w http.ResponseWriter, r *http.Request) {
 
 	createdBy, _ := util.ParseUUID(requestUserID(r))
 	if _, err := h.Queries.UpsertMcpOauthToken(r.Context(), db.UpsertMcpOauthTokenParams{
-		WorkspaceID:    agent.WorkspaceID,
+		WorkspaceID:    rt.WorkspaceID,
 		Resource:       resourceURL,
 		AccessTokenEnc: accessEnc,
 		CreatedBy:      createdBy,

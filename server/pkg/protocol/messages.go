@@ -118,6 +118,10 @@ type ChatSessionUpdatedPayload struct {
 type McpServerInfo struct {
 	Name      string `json:"name"`
 	Transport string `json:"transport"` // stdio | http
+	// URL is the remote endpoint for http servers (empty for stdio). It is an
+	// endpoint, not a secret — reported so the control plane can resolve which
+	// server to authenticate in the in-app OAuth flow.
+	URL string `json:"url,omitempty"`
 }
 
 // McpProbeServerResult is one server's probe outcome (mirrors
