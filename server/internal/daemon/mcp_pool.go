@@ -43,6 +43,12 @@ func (d *Daemon) machineMcpServers(rid string) []protocol.McpServerInfo {
 		}
 		return nil
 	}
+	// Coerce a successful zero-server resolve to a non-nil empty slice so the
+	// heartbeat encodes `[]` (an explicit "no servers" the server persists),
+	// not `null` (which it treats as "old daemon, didn't report").
+	if servers == nil {
+		servers = []protocol.McpServerInfo{}
+	}
 	d.mcpPoolCache[provider] = cachedMcpPool{servers: servers, at: time.Now()}
 	return servers
 }

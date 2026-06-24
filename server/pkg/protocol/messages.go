@@ -142,9 +142,12 @@ type DaemonHeartbeatRequestPayload struct {
 	RuntimeID           string `json:"runtime_id"`
 	SupportsBatchImport bool   `json:"supports_batch_import,omitempty"`
 	// McpServers is the runtime host's own MCP pool (name+transport only),
-	// reported so the control plane can mirror it and agents can reuse it.
-	// Omitempty keeps older daemons (which never set it) wire-compatible.
-	McpServers []McpServerInfo `json:"mcp_servers,omitempty"`
+	// reported so the control plane can mirror it and agents can reuse it. NOT
+	// omitempty: a current daemon sends a non-nil `[]` to mean "I resolved zero
+	// servers" (so the mirror clears when all servers are removed), vs older
+	// daemons which never set the field and encode `null` — the server skips
+	// the latter and never clobbers a known pool.
+	McpServers []McpServerInfo `json:"mcp_servers"`
 }
 
 // DaemonHeartbeatAckPayload is the server's reply to DaemonHeartbeatRequestPayload.

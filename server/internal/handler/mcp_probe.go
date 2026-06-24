@@ -168,6 +168,27 @@ func (s *InMemoryMcpProbeStore) PopPending(runtimeID string) *McpProbeRequest {
 	return oldest
 }
 
+// LatestResultsForRuntime returns the results of the most recently completed
+// probe for a runtime, or nil if none is retained. Used by the Runtime page to
+// show the last connection-test outcome alongside the reported pool.
+func (s *InMemoryMcpProbeStore) LatestResultsForRuntime(runtimeID string) []protocol.McpProbeServerResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var latest *McpProbeRequest
+	for _, req := range s.requests {
+		if req.RuntimeID != runtimeID || req.Status != McpProbeCompleted {
+			continue
+		}
+		if latest == nil || req.UpdatedAt.After(latest.UpdatedAt) {
+			latest = req
+		}
+	}
+	if latest == nil {
+		return nil
+	}
+	return latest.Results
+}
+
 func (s *InMemoryMcpProbeStore) Complete(id string, results []protocol.McpProbeServerResult) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

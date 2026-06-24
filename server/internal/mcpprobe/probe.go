@@ -14,6 +14,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -277,9 +279,39 @@ func awaitResponse(ctx context.Context, lines <-chan []byte, wantID string) (rpc
 
 // --- http / SSE transport ---
 
+// probeRootPool loads CA roots straight from the OS trust bundle so HTTPS
+// verification uses Go's pure-Go verifier instead of the platform verifier. On
+// macOS the platform verifier (SecPolicyCreateSSL) fails when the daemon runs
+// detached from a login session's bootstrap namespace — XPC to trustd is
+// unreachable — reporting every HTTPS MCP server as a cert failure even though
+// the cert is valid (the real CLI, e.g. Node-based, connects fine). Reading the
+// same bundle curl uses sidesteps that. nil => bundle not found, fall back to
+// the default verifier (which already works off-darwin).
+var probeRootPool = sync.OnceValue(func() *x509.CertPool {
+	files := []string{
+		os.Getenv("SSL_CERT_FILE"),
+		"/etc/ssl/cert.pem",                  // macOS, *BSD
+		"/etc/ssl/certs/ca-certificates.crt", // Debian/Ubuntu/Alpine
+		"/etc/pki/tls/certs/ca-bundle.crt",   // RHEL/Fedora
+	}
+	pool := x509.NewCertPool()
+	for _, f := range files {
+		if f == "" {
+			continue
+		}
+		if pem, err := os.ReadFile(f); err == nil && pool.AppendCertsFromPEM(pem) {
+			return pool
+		}
+	}
+	return nil
+})
+
 func probeHTTP(ctx context.Context, name string, entry serverEntry) Result {
 	endpoint := entry.endpoint()
 	client := &http.Client{}
+	if pool := probeRootPool(); pool != nil {
+		client.Transport = &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}
+	}
 
 	rpc := httpRPC(ctx, client, endpoint, entry.Headers, "", initializeRequest())
 	switch rpc.status {

@@ -213,6 +213,79 @@ func (h *Handler) CompleteMcpOauth(w http.ResponseWriter, r *http.Request) {
 	writeOAuthResult(w, true, "")
 }
 
+type setMcpTokenRequest struct {
+	// Server is the mcpServers key to attach the token to.
+	Server string `json:"server"`
+	// Token is the user-supplied access token (e.g. a GitHub PAT).
+	Token string `json:"token"`
+}
+
+// SetMcpAccessToken stores a user-supplied access token for one remote MCP
+// server, the manual fallback for providers whose OAuth server doesn't support
+// dynamic client registration (e.g. GitHub) so the in-app Authenticate flow
+// can't run. The token is sealed at rest and injected as `Authorization:
+// Bearer <token>` exactly like an OAuth-obtained one — same (workspace,
+// resource) keying, no refresh token, no expiry.
+func (h *Handler) SetMcpAccessToken(w http.ResponseWriter, r *http.Request) {
+	if h.McpOAuthBox == nil {
+		writeError(w, http.StatusBadRequest, "MCP token storage is not configured on this server (set MULTICA_MCP_SECRET_KEY)")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	agent, ok := h.loadAgentForUser(w, r, id)
+	if !ok {
+		return
+	}
+	member, ok := ctxMember(r.Context())
+	if !ok || !canViewAgentSecrets(agent, requestUserID(r), member.Role) {
+		writeError(w, http.StatusForbidden, "you are not allowed to set tokens for this agent's MCP servers")
+		return
+	}
+
+	var body setMcpTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	body.Server = strings.TrimSpace(body.Server)
+	body.Token = strings.TrimSpace(body.Token)
+	if body.Server == "" || body.Token == "" {
+		writeError(w, http.StatusBadRequest, "server and token are required")
+		return
+	}
+
+	var workspaceCfg json.RawMessage
+	if raw, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), agent.WorkspaceID); err == nil && len(raw) > 0 {
+		workspaceCfg = json.RawMessage(raw)
+	}
+	effective := mergeWorkspaceAgentMcpConfig(workspaceCfg, agent.McpConfig)
+	resourceURL := mcpServerURL(effective, body.Server)
+	if resourceURL == "" {
+		writeError(w, http.StatusBadRequest, "server has no URL (only remote http MCP servers accept an access token)")
+		return
+	}
+
+	accessEnc, err := h.McpOAuthBox.Seal([]byte(body.Token))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to store the token")
+		return
+	}
+
+	createdBy, _ := util.ParseUUID(requestUserID(r))
+	if _, err := h.Queries.UpsertMcpOauthToken(r.Context(), db.UpsertMcpOauthTokenParams{
+		WorkspaceID:    agent.WorkspaceID,
+		Resource:       resourceURL,
+		AccessTokenEnc: accessEnc,
+		CreatedBy:      createdBy,
+	}); err != nil {
+		slog.Error("mcp access token upsert failed", "resource", resourceURL, "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to store the token")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // normalizeOAuthOrigin validates and normalizes a browser origin into a bare
 // scheme://host[:port] string (no trailing slash, no path).
 func normalizeOAuthOrigin(origin string) (string, bool) {

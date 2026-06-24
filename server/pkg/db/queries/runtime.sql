@@ -29,6 +29,14 @@ FOR UPDATE;
 SELECT * FROM agent_runtime
 WHERE id = $1 AND workspace_id = $2;
 
+-- name: UpdateRuntimeReportedMcpServers :exec
+-- Persists the daemon-reported machine MCP pool. Called from the heartbeat
+-- path only when the reported set actually changed, so heartbeats don't write
+-- this every 15s tick.
+UPDATE agent_runtime
+SET reported_mcp_servers = $2
+WHERE id = $1;
+
 -- name: UpsertAgentRuntime :one
 -- (xmax = 0) AS inserted distinguishes a fresh insert (true) from an upsert
 -- that updated an existing row (false). Analytics reads this to fire

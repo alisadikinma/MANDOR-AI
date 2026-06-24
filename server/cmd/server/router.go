@@ -857,6 +857,11 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// server in the agent's effective config. Gated to
 					// secret-viewers in the handler; returns an authorize_url.
 					r.Post("/mcp/oauth/start", h.InitiateMcpOauth)
+					// Store a user-supplied access token (e.g. a GitHub PAT)
+					// for a remote MCP server — the manual fallback when the
+					// provider's OAuth server doesn't support dynamic client
+					// registration. Gated to secret-viewers in the handler.
+					r.Post("/mcp/token", h.SetMcpAccessToken)
 				})
 			})
 
@@ -929,6 +934,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Get("/usage/by-agent", h.GetRuntimeUsageByAgent)
 					r.Get("/usage/by-hour", h.GetRuntimeUsageByHour)
 					r.Get("/activity", h.GetRuntimeTaskActivity)
+					r.Get("/mcp", h.GetRuntimeMcp)
 					r.Post("/update", h.InitiateUpdate)
 					r.Get("/update/{updateId}", h.GetUpdate)
 					r.Post("/models", h.InitiateListModels)
