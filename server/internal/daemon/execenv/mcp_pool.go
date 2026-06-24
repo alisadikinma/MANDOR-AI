@@ -31,9 +31,21 @@ import (
 func ResolveMachineMcpServers(runtimeType, homeDir string) ([]protocol.McpServerInfo, error) {
 	switch strings.ToLower(strings.TrimSpace(runtimeType)) {
 	case "codex":
-		return codexMachineMcpServers(filepath.Join(homeDir, "config.toml"))
+		dir := homeDir
+		if dir == "" {
+			dir = resolveSharedCodexHome()
+		}
+		return codexMachineMcpServers(filepath.Join(dir, "config.toml"))
 	case "claude":
-		return claudeMachineMcpServers(filepath.Join(homeDir, ".claude.json"))
+		dir := homeDir
+		if dir == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, nil // no home → no machine config to read; not an error
+			}
+			dir = home
+		}
+		return claudeMachineMcpServers(filepath.Join(dir, ".claude.json"))
 	case "openclaw":
 		return openclawMachineMcpServers()
 	default:

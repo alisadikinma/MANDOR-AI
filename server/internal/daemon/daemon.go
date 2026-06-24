@@ -96,6 +96,13 @@ type Daemon struct {
 	versionsMu    sync.RWMutex      // guards agentVersions
 	agentVersions map[string]string // provider -> detected CLI version (set during registration)
 
+	// machine MCP pool reported on the heartbeat, cached per provider with a
+	// TTL so openclaw (which resolves via a CLI spawn) is not re-read on every
+	// 15s heartbeat tick. resolveMcpServers is injectable for tests.
+	mcpPoolMu         sync.Mutex
+	mcpPoolCache      map[string]cachedMcpPool // provider -> cached pool
+	resolveMcpServers func(runtimeType, homeDir string) ([]protocol.McpServerInfo, error)
+
 	wsHBMu      sync.RWMutex         // guards wsHBLastAck
 	wsHBLastAck map[string]time.Time // runtime_id -> last successful WS heartbeat ack timestamp
 
@@ -173,6 +180,8 @@ func New(cfg Config, logger *slog.Logger) *Daemon {
 		runtimeIndex:              make(map[string]Runtime),
 		runtimeSet:                newRuntimeSetWatcher(),
 		agentVersions:             make(map[string]string),
+		mcpPoolCache:              make(map[string]cachedMcpPool),
+		resolveMcpServers:         execenv.ResolveMachineMcpServers,
 		wsHBLastAck:               make(map[string]time.Time),
 		activeEnvRoots:            make(map[string]int),
 		localPathLocks:            NewLocalPathLocker(),
@@ -1358,7 +1367,7 @@ func (d *Daemon) runHeartbeatTick(ctx context.Context, rid string) {
 		return
 	}
 	d.logger.Debug("heartbeat: HTTP tick", "runtime_id", rid)
-	resp, err := d.client.SendHeartbeat(ctx, rid)
+	resp, err := d.client.SendHeartbeat(ctx, rid, d.machineMcpServers(rid))
 	if err != nil {
 		if ctx.Err() == nil {
 			if isRuntimeNotFoundError(err) {

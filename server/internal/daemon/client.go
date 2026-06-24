@@ -290,11 +290,12 @@ type (
 	PendingMcpProbe         = protocol.DaemonHeartbeatPendingMcpProbe
 )
 
-func (c *Client) SendHeartbeat(ctx context.Context, runtimeID string) (*HeartbeatResponse, error) {
+func (c *Client) SendHeartbeat(ctx context.Context, runtimeID string, mcpServers []protocol.McpServerInfo) (*HeartbeatResponse, error) {
 	var resp HeartbeatResponse
-	if err := c.postJSON(ctx, "/api/daemon/heartbeat", map[string]any{
-		"runtime_id":             runtimeID,
-		"supports_batch_import":  true,
+	if err := c.postJSON(ctx, "/api/daemon/heartbeat", protocol.DaemonHeartbeatRequestPayload{
+		RuntimeID:           runtimeID,
+		SupportsBatchImport: true,
+		McpServers:          mcpServers,
 	}, &resp); err != nil {
 		return nil, err
 	}
