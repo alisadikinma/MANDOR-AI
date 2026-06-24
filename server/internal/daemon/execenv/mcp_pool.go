@@ -13,54 +13,70 @@ import (
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
-// ResolveMachineMcpServers reads the MCP servers configured on the runtime
-// host for the given runtime type and returns them as name + transport only —
-// no command/url/env/tokens. This is the runtime's pool: agents on the runtime
-// reuse it instead of carrying their own server definitions.
+// MachineMcpConfigJSON returns the runtime host's own MCP servers as a full
+// `{"mcpServers":{"<name>":{...}}}` JSON document — commands, args, env, urls
+// and all. This is what mcpprobe needs to actually connect, and what the
+// task-time path filters by an agent's deny-list. It stays on the runtime host
+// (the daemon); secrets in it never travel to the control plane.
 //
-// Each runtime stores config differently, so this dispatches per type:
-//   - codex   → ~/.codex/config.toml `[mcp_servers]` (homeDir/config.toml in tests)
-//   - claude  → ~/.claude.json top-level `mcpServers` (homeDir/.claude.json)
-//   - openclaw → `openclaw config get mcp.servers --json` (no static file)
+// Each runtime stores config differently:
+//   - codex    → ~/.codex/config.toml `[mcp_servers]` (homeDir/config.toml in tests)
+//   - claude   → ~/.claude.json top-level `mcpServers` (homeDir/.claude.json)
+//   - openclaw → `openclaw config get mcp.servers --json`
 //
-// homeDir is the directory holding the runtime's config (the codex home, or the
-// user home for claude); tests pass a temp dir. It is ignored for openclaw,
-// which resolves through its own CLI. An unknown runtime type or a missing
-// config yields an empty slice, never an error — a runtime with no MCP servers
-// is a normal state, not a failure.
-func ResolveMachineMcpServers(runtimeType, homeDir string) ([]protocol.McpServerInfo, error) {
+// homeDir is the config directory (codex home, or user home for claude); empty
+// resolves the default. Ignored for openclaw. An unknown runtime or a missing /
+// empty config returns nil (no servers), never an error.
+func MachineMcpConfigJSON(runtimeType, homeDir string) (json.RawMessage, error) {
 	switch strings.ToLower(strings.TrimSpace(runtimeType)) {
 	case "codex":
 		dir := homeDir
 		if dir == "" {
 			dir = resolveSharedCodexHome()
 		}
-		return codexMachineMcpServers(filepath.Join(dir, "config.toml"))
+		return codexMachineConfig(filepath.Join(dir, "config.toml"))
 	case "claude":
 		dir := homeDir
 		if dir == "" {
 			home, err := os.UserHomeDir()
 			if err != nil {
-				return nil, nil // no home → no machine config to read; not an error
+				return nil, nil
 			}
 			dir = home
 		}
-		return claudeMachineMcpServers(filepath.Join(dir, ".claude.json"))
+		return claudeMachineConfig(filepath.Join(dir, ".claude.json"))
 	case "openclaw":
-		return openclawMachineMcpServers()
+		return openclawMachineConfig()
 	default:
 		return nil, nil
 	}
 }
 
-// mcpEntry is the minimal shape we classify across all three config formats:
-// a `command` means stdio; any URL field means http. Both TOML and JSON decode
-// into it via the struct tags.
+// ResolveMachineMcpServers returns the runtime host's MCP servers as name +
+// transport only — no secrets — for the pool the daemon reports and agents
+// reuse. Derived from MachineMcpConfigJSON so there is one source of truth for
+// reading each runtime's config.
+func ResolveMachineMcpServers(runtimeType, homeDir string) ([]protocol.McpServerInfo, error) {
+	raw, err := MachineMcpConfigJSON(runtimeType, homeDir)
+	if err != nil || len(raw) == 0 {
+		return nil, err
+	}
+	var cfg struct {
+		McpServers map[string]mcpEntry `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return nil, err
+	}
+	return toServerInfos(cfg.McpServers), nil
+}
+
+// mcpEntry is the minimal shape we classify for transport: a `command` means
+// stdio; any URL field means http.
 type mcpEntry struct {
-	Command   string `json:"command" toml:"command"`
-	URL       string `json:"url" toml:"url"`
-	HTTPURL   string `json:"httpUrl" toml:"httpUrl"`
-	ServerURL string `json:"serverUrl" toml:"serverUrl"`
+	Command   string `json:"command"`
+	URL       string `json:"url"`
+	HTTPURL   string `json:"httpUrl"`
+	ServerURL string `json:"serverUrl"`
 }
 
 func (e mcpEntry) transport() string {
@@ -70,12 +86,10 @@ func (e mcpEntry) transport() string {
 	case strings.TrimSpace(e.URL) != "", strings.TrimSpace(e.HTTPURL) != "", strings.TrimSpace(e.ServerURL) != "":
 		return "http"
 	default:
-		return "stdio" // a server with neither is unusual; default to stdio rather than drop it
+		return "stdio"
 	}
 }
 
-// toServerInfos turns a name→entry map into a name-sorted slice so the reported
-// pool is stable across runs (map iteration order is otherwise random).
 func toServerInfos(entries map[string]mcpEntry) []protocol.McpServerInfo {
 	names := make([]string, 0, len(entries))
 	for name := range entries {
@@ -89,7 +103,18 @@ func toServerInfos(entries map[string]mcpEntry) []protocol.McpServerInfo {
 	return out
 }
 
-func codexMachineMcpServers(path string) ([]protocol.McpServerInfo, error) {
+// wrapServers marshals a name→entry map as `{"mcpServers":{...}}`, or returns
+// nil when there are no servers (so callers treat "no config" uniformly).
+func wrapServers(servers map[string]json.RawMessage) (json.RawMessage, error) {
+	if len(servers) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(struct {
+		McpServers map[string]json.RawMessage `json:"mcpServers"`
+	}{servers})
+}
+
+func codexMachineConfig(path string) (json.RawMessage, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -97,16 +122,27 @@ func codexMachineMcpServers(path string) ([]protocol.McpServerInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Codex stores servers as a TOML `[mcp_servers.<name>]` table. Decode that
+	// sub-table into generic JSON-able values; the keys (command/args/env/url)
+	// already match what mcpprobe and the CLIs expect.
 	var cfg struct {
-		McpServers map[string]mcpEntry `toml:"mcp_servers"`
+		McpServers map[string]map[string]any `toml:"mcp_servers"`
 	}
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
-	return toServerInfos(cfg.McpServers), nil
+	servers := make(map[string]json.RawMessage, len(cfg.McpServers))
+	for name, entry := range cfg.McpServers {
+		b, err := json.Marshal(entry)
+		if err != nil {
+			return nil, err
+		}
+		servers[name] = b
+	}
+	return wrapServers(servers)
 }
 
-func claudeMachineMcpServers(path string) ([]protocol.McpServerInfo, error) {
+func claudeMachineConfig(path string) (json.RawMessage, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -117,15 +153,15 @@ func claudeMachineMcpServers(path string) ([]protocol.McpServerInfo, error) {
 	// Only the top-level mcpServers is the machine-wide pool. Project-scoped
 	// servers (projects.<path>.mcpServers) are per-workdir and out of scope.
 	var cfg struct {
-		McpServers map[string]mcpEntry `json:"mcpServers"`
+		McpServers map[string]json.RawMessage `json:"mcpServers"`
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
-	return toServerInfos(cfg.McpServers), nil
+	return wrapServers(cfg.McpServers)
 }
 
-func openclawMachineMcpServers() ([]protocol.McpServerInfo, error) {
+func openclawMachineConfig() (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), openclawCLITimeout)
 	defer cancel()
 	out, err := openclawExec(ctx, "openclaw", "config", "get", "mcp.servers", "--json")
@@ -139,9 +175,9 @@ func openclawMachineMcpServers() ([]protocol.McpServerInfo, error) {
 	if trimmed == "" || trimmed == "null" {
 		return nil, nil
 	}
-	var servers map[string]mcpEntry
+	var servers map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(trimmed), &servers); err != nil {
 		return nil, err
 	}
-	return toServerInfos(servers), nil
+	return wrapServers(servers)
 }

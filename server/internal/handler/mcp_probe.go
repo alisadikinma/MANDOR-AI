@@ -203,74 +203,32 @@ func (s *InMemoryMcpProbeStore) Complete(id string, results []protocol.McpProbeS
 // Handlers
 // ---------------------------------------------------------------------------
 
-// InitiateAgentMcpProbe enqueues a probe of an agent's effective MCP config.
-// Gated to callers allowed to see the agent's secrets (probing connects with
-// them). Returns the pending request; the UI polls GET /api/mcp-probe/{id}.
-func (h *Handler) InitiateAgentMcpProbe(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	agent, ok := h.loadAgentForUser(w, r, id)
+// InitiateRuntimeMcpProbe enqueues a probe of a runtime's own machine MCP pool.
+// The request carries NO config — the daemon reads its own machine config and
+// probes that (where the servers and their secrets physically live). Member-
+// gated via the runtime's workspace; the probe returns only per-server status
+// and tool counts, never secrets. The UI polls GET /api/mcp-probe/{id}.
+func (h *Handler) InitiateRuntimeMcpProbe(w http.ResponseWriter, r *http.Request) {
+	runtimeUUID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "runtimeId"), "runtimeId")
 	if !ok {
 		return
 	}
-	member, ok := ctxMember(r.Context())
-	if !ok || !canViewAgentSecrets(agent, requestUserID(r), member.Role) {
-		writeError(w, http.StatusForbidden, "you are not allowed to test this agent's MCP servers")
+	rt, err := h.Queries.GetAgentRuntime(r.Context(), runtimeUUID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "runtime not found")
 		return
 	}
-	if !agent.RuntimeID.Valid {
-		writeError(w, http.StatusBadRequest, "agent has no runtime to test on")
+	if _, ok := h.requireWorkspaceMember(w, r, uuidToString(rt.WorkspaceID), "runtime not found"); !ok {
 		return
 	}
-	runtimeID := uuidToString(agent.RuntimeID)
+	runtimeID := uuidToString(rt.ID)
 	if !h.runtimeOnline(r.Context(), runtimeID) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "runtime_offline"})
 		return
 	}
 
-	var workspaceCfg json.RawMessage
-	if raw, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), agent.WorkspaceID); err == nil && len(raw) > 0 {
-		workspaceCfg = json.RawMessage(raw)
-	}
-	effective := mergeWorkspaceAgentMcpConfig(workspaceCfg, agent.McpConfig)
-	effective = h.injectMcpOauthHeaders(r.Context(), agent.WorkspaceID, effective)
-
-	req := h.McpProbeStore.Create(runtimeID, uuidToString(agent.WorkspaceID), effective)
-	writeJSON(w, http.StatusOK, req)
-}
-
-// InitiateWorkspaceMcpProbe enqueues a probe of the workspace-level MCP config.
-// Mounted under the owner/admin route group. Runs on the first online runtime
-// in the workspace (the servers are workspace-wide, so any runtime is a valid
-// place to test them).
-func (h *Handler) InitiateWorkspaceMcpProbe(w http.ResponseWriter, r *http.Request) {
-	wsID := workspaceIDFromURL(r, "id")
-	wsUUID, ok := parseUUIDOrBadRequest(w, wsID, "workspace id")
-	if !ok {
-		return
-	}
-	runtimes, err := h.Queries.ListAgentRuntimes(r.Context(), wsUUID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to resolve a runtime to test on")
-		return
-	}
-	runtimeID := ""
-	for _, rt := range runtimes {
-		if rt.Status == "online" && h.runtimeOnline(r.Context(), uuidToString(rt.ID)) {
-			runtimeID = uuidToString(rt.ID)
-			break
-		}
-	}
-	if runtimeID == "" {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "runtime_offline"})
-		return
-	}
-
-	var cfg json.RawMessage
-	if raw, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), wsUUID); err == nil && len(raw) > 0 {
-		cfg = json.RawMessage(raw)
-	}
-	cfg = h.injectMcpOauthHeaders(r.Context(), wsUUID, cfg)
-	req := h.McpProbeStore.Create(runtimeID, wsID, cfg)
+	// nil config = "probe your own pool"; the daemon sources its machine config.
+	req := h.McpProbeStore.Create(runtimeID, uuidToString(rt.WorkspaceID), nil)
 	writeJSON(w, http.StatusOK, req)
 }
 

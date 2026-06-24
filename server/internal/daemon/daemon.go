@@ -1419,7 +1419,7 @@ func (d *Daemon) handleHeartbeatActions(ctx context.Context, runtimeID string, r
 		}
 	}
 	if resp.PendingMcpProbe != nil {
-		go d.handleMcpProbe(ctx, runtimeID, resp.PendingMcpProbe.ID, resp.PendingMcpProbe.Config)
+		go d.handleMcpProbe(ctx, runtimeID, resp.PendingMcpProbe.ID)
 	}
 	if resp.PendingLocalSkills != nil {
 		if rt := d.findRuntime(runtimeID); rt != nil {
@@ -1440,17 +1440,26 @@ func (d *Daemon) handleHeartbeatActions(ctx context.Context, runtimeID string, r
 	}
 }
 
-// handleMcpProbe runs a real MCP connection handshake against the effective
-// config the server handed us — applying the same disabledMcpServers strip a
-// task run would, so it tests exactly what the runtime will use — and reports
-// per-server status back. A server that fails to connect is reported as a
-// per-server "failed" result, never as a request-level error: the UI wants to
-// show which servers connected and which didn't.
-func (d *Daemon) handleMcpProbe(ctx context.Context, runtimeID, requestID string, config json.RawMessage) {
+// handleMcpProbe runs a real MCP connection handshake against the runtime's own
+// machine MCP pool (resolved from the host's config for this runtime's
+// provider) and reports per-server status back. The control plane sends no
+// config — the servers and their secrets live here on the host. A server that
+// fails to connect is reported as a per-server "failed" result, never as a
+// request-level error: the UI wants to show which servers connected and which
+// didn't.
+func (d *Daemon) handleMcpProbe(ctx context.Context, runtimeID, requestID string) {
 	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	results := mcpprobe.ProbeConfig(probeCtx, runtimeMcpConfig(config))
+	var config json.RawMessage
+	if rt := d.findRuntime(runtimeID); rt != nil && rt.Provider != "" {
+		cfg, err := execenv.MachineMcpConfigJSON(rt.Provider, "")
+		if err != nil {
+			d.logger.Warn("mcp probe: resolve machine config", "runtime_id", runtimeID, "provider", rt.Provider, "error", err)
+		}
+		config = cfg
+	}
+	results := mcpprobe.ProbeConfig(probeCtx, config)
 
 	payload := protocol.McpProbeResultPayload{
 		Results: make([]protocol.McpProbeServerResult, 0, len(results)),

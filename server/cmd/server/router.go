@@ -578,7 +578,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// only, like the agent mcp_config read gate.
 					r.Get("/mcp-config", h.GetWorkspaceMcpConfig)
 					r.Put("/mcp-config", h.UpdateWorkspaceMcpConfig)
-					r.Post("/mcp/probe", h.InitiateWorkspaceMcpProbe)
 					r.Post("/members", h.CreateInvitation)
 					r.Route("/members/{memberId}", func(r chi.Router) {
 						r.Patch("/", h.UpdateMember)
@@ -849,10 +848,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// internal/handler/agent_env.go.
 					r.Get("/env", h.GetAgentEnv)
 					r.Put("/env", h.UpdateAgentEnv)
-					// MCP connection probe: enqueue a real handshake of the
-					// agent's effective MCP config on its runtime. Gated to
-					// secret-viewers in the handler.
-					r.Post("/mcp/probe", h.InitiateAgentMcpProbe)
 					// Begin an in-app OAuth authorization for one remote MCP
 					// server in the agent's effective config. Gated to
 					// secret-viewers in the handler; returns an authorize_url.
@@ -935,6 +930,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Get("/usage/by-hour", h.GetRuntimeUsageByHour)
 					r.Get("/activity", h.GetRuntimeTaskActivity)
 					r.Get("/mcp", h.GetRuntimeMcp)
+					r.Post("/mcp/probe", h.InitiateRuntimeMcpProbe)
 					r.Post("/update", h.InitiateUpdate)
 					r.Get("/update/{updateId}", h.GetUpdate)
 					r.Post("/models", h.InitiateListModels)

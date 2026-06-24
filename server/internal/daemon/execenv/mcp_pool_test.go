@@ -2,6 +2,7 @@ package execenv
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -110,5 +111,68 @@ func TestResolveMachineMcpServersUnknownRuntimeIsEmpty(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("expected no servers for unknown runtime, got %v", got)
+	}
+}
+
+// MachineMcpConfigJSON returns the FULL machine config (command/args/env/url)
+// in `{"mcpServers":{...}}` shape so the daemon can probe its own pool.
+func TestMachineMcpConfigJSONCodexFullEntries(t *testing.T) {
+	dir := t.TempDir()
+	cfg := `
+[mcp_servers.github]
+command = "npx"
+args = ["-y", "server-github"]
+
+[mcp_servers.github.env]
+GITHUB_TOKEN = "tok"
+`
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := MachineMcpConfigJSON("codex", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var parsed struct {
+		McpServers map[string]struct {
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Env     map[string]string `json:"env"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("result not {mcpServers:...}: %v (%s)", err, raw)
+	}
+	gh := parsed.McpServers["github"]
+	if gh.Command != "npx" || len(gh.Args) != 2 || gh.Env["GITHUB_TOKEN"] != "tok" {
+		t.Fatalf("full entry not preserved: %+v", gh)
+	}
+}
+
+func TestMachineMcpConfigJSONOpenclawWraps(t *testing.T) {
+	orig := openclawExec
+	t.Cleanup(func() { openclawExec = orig })
+	openclawExec = func(_ context.Context, _ string, _ ...string) (string, error) {
+		return `{"github":{"command":"npx"}}`, nil
+	}
+	raw, err := MachineMcpConfigJSON("openclaw", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var parsed struct {
+		McpServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil || len(parsed.McpServers) != 1 {
+		t.Fatalf("openclaw config not wrapped as mcpServers: %v (%s)", err, raw)
+	}
+}
+
+func TestMachineMcpConfigJSONEmptyIsNil(t *testing.T) {
+	raw, err := MachineMcpConfigJSON("codex", t.TempDir())
+	if err != nil {
+		t.Fatalf("missing config must not error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("expected nil for no config, got %s", raw)
 	}
 }

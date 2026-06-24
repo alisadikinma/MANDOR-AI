@@ -50,6 +50,48 @@ func TestGetRuntimeMcpReturnsReportedPool(t *testing.T) {
 	}
 }
 
+// TestInitiateRuntimeMcpProbeEnqueuesOwnPoolProbe: the runtime probe enqueues a
+// request with NO config — the daemon probes its own machine pool, the server
+// never pushes server definitions.
+func TestInitiateRuntimeMcpProbeEnqueuesOwnPoolProbe(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+	runtimeID := handlerTestRuntimeID(t)
+
+	var prevStatus string
+	testPool.QueryRow(ctx, `SELECT status FROM agent_runtime WHERE id = $1`, runtimeID).Scan(&prevStatus)
+	if _, err := testPool.Exec(ctx, `UPDATE agent_runtime SET status = 'online' WHERE id = $1`, runtimeID); err != nil {
+		t.Fatalf("force online: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `UPDATE agent_runtime SET status = $2 WHERE id = $1`, runtimeID, prevStatus)
+	})
+
+	w := httptest.NewRecorder()
+	req := withURLParam(newRequest("POST", "/api/runtimes/"+runtimeID+"/mcp/probe", nil), "runtimeId", runtimeID)
+	testHandler.InitiateRuntimeMcpProbe(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var probe McpProbeRequest
+	if err := json.NewDecoder(w.Body).Decode(&probe); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if probe.Status != McpProbePending {
+		t.Fatalf("status = %q, want pending", probe.Status)
+	}
+
+	popped := testHandler.McpProbeStore.PopPending(runtimeID)
+	if popped == nil {
+		t.Fatal("expected a pending probe enqueued for the runtime")
+	}
+	if popped.Config != nil {
+		t.Fatalf("runtime probe must carry no config, got %s", popped.Config)
+	}
+}
+
 // TestGetRuntimeMcpEmptyPool: a runtime that has reported nothing returns an
 // empty list, not an error or null crash.
 func TestGetRuntimeMcpEmptyPool(t *testing.T) {
