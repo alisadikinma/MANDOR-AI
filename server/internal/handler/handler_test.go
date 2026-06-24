@@ -2130,7 +2130,7 @@ func TestAgentCRUD(t *testing.T) {
 }
 
 func TestUpdateAgentMcpConfigAbsentPreservesValue(t *testing.T) {
-	agentID := createHandlerTestAgent(t, "Handler Mcp Preserve", []byte(`{"preset":"keep"}`))
+	agentID := createHandlerTestAgent(t, "Handler Mcp Preserve", []byte(`{"disabledMcpServers":["keep"]}`))
 
 	w := httptest.NewRecorder()
 	req := newRequest("PUT", "/api/agents/"+agentID, map[string]any{
@@ -2146,8 +2146,8 @@ func TestUpdateAgentMcpConfigAbsentPreservesValue(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
 		t.Fatalf("UpdateAgent: decode response: %v", err)
 	}
-	assertJSONEqual(t, updated.McpConfig, `{"preset":"keep"}`)
-	assertJSONEqual(t, fetchAgentMcpConfig(t, agentID), `{"preset":"keep"}`)
+	assertJSONEqual(t, updated.McpConfig, `{"disabledMcpServers":["keep"]}`)
+	assertJSONEqual(t, fetchAgentMcpConfig(t, agentID), `{"disabledMcpServers":["keep"]}`)
 }
 
 func TestUpdateAgentMcpConfigNullClearsValue(t *testing.T) {
@@ -2174,11 +2174,13 @@ func TestUpdateAgentMcpConfigNullClearsValue(t *testing.T) {
 }
 
 func TestUpdateAgentMcpConfigObjectUpdatesValue(t *testing.T) {
-	agentID := createHandlerTestAgent(t, "Handler Mcp Update", []byte(`{"preset":"old"}`))
+	agentID := createHandlerTestAgent(t, "Handler Mcp Update", []byte(`{"disabledMcpServers":["old"]}`))
 
 	w := httptest.NewRecorder()
+	// Under the runtime-pool model an agent's mcp_config is a deny-list over the
+	// runtime's servers, not a free-form config.
 	req := newRequest("PUT", "/api/agents/"+agentID, map[string]any{
-		"mcp_config": map[string]any{"preset": "new"},
+		"mcp_config": map[string]any{"disabledMcpServers": []string{"github"}},
 	})
 	req = withURLParam(req, "id", agentID)
 	testHandler.UpdateAgent(w, req)
@@ -2190,8 +2192,18 @@ func TestUpdateAgentMcpConfigObjectUpdatesValue(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
 		t.Fatalf("UpdateAgent: decode response: %v", err)
 	}
-	assertJSONEqual(t, updated.McpConfig, `{"preset":"new"}`)
-	assertJSONEqual(t, fetchAgentMcpConfig(t, agentID), `{"preset":"new"}`)
+	assertJSONEqual(t, updated.McpConfig, `{"disabledMcpServers":["github"]}`)
+	assertJSONEqual(t, fetchAgentMcpConfig(t, agentID), `{"disabledMcpServers":["github"]}`)
+
+	// A stale client sending the old full-config shape is rejected.
+	w2 := httptest.NewRecorder()
+	bad := withURLParam(newRequest("PUT", "/api/agents/"+agentID, map[string]any{
+		"mcp_config": map[string]any{"mcpServers": map[string]any{"x": map[string]any{"command": "y"}}},
+	}), "id", agentID)
+	testHandler.UpdateAgent(w2, bad)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for server-definition mcp_config, got %d: %s", w2.Code, w2.Body.String())
+	}
 }
 
 func TestCreateAgentMcpConfigNullStoresSQLNull(t *testing.T) {

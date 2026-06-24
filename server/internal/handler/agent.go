@@ -704,6 +704,10 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 
 	var mc []byte
 	if rawMcpConfig, ok := rawFields["mcp_config"]; ok && !bytes.Equal(bytes.TrimSpace(rawMcpConfig), []byte("null")) {
+		if msg, valid := validateAgentMcpConfig(rawMcpConfig); !valid {
+			writeError(w, http.StatusBadRequest, msg)
+			return
+		}
 		mc = append([]byte(nil), rawMcpConfig...)
 	}
 
@@ -944,6 +948,10 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	rawMcpConfig, hasMcpConfig := rawFields["mcp_config"]
 	shouldClearMcpConfig := hasMcpConfig && bytes.Equal(bytes.TrimSpace(rawMcpConfig), []byte("null"))
 	if hasMcpConfig && !shouldClearMcpConfig {
+		if msg, valid := validateAgentMcpConfig(rawMcpConfig); !valid {
+			writeError(w, http.StatusBadRequest, msg)
+			return
+		}
 		params.McpConfig = append([]byte(nil), rawMcpConfig...)
 	}
 
