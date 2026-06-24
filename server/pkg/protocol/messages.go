@@ -111,6 +111,15 @@ type ChatSessionUpdatedPayload struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
+// McpServerInfo is one MCP server a runtime exposes from its own machine
+// config, reported up so agents can reuse the runtime's pool without
+// re-declaring servers. Name + transport only — never command/url/env/tokens;
+// the definitions and secrets stay on the runtime host.
+type McpServerInfo struct {
+	Name      string `json:"name"`
+	Transport string `json:"transport"` // stdio | http
+}
+
 // McpProbeServerResult is one server's probe outcome (mirrors
 // mcpprobe.Result). Status is one of connected|failed|needs_auth|skipped.
 type McpProbeServerResult struct {
