@@ -962,6 +962,30 @@ export const McpProbeRequestSchema = z
 // (rather than spinning forever) and surfaces as "test failed".
 export const EMPTY_MCP_PROBE_REQUEST: { status: string } = { status: "timeout" };
 
+// A single MCP server in a runtime's reported pool (GET /api/runtimes/{id}/mcp).
+// Name + transport (+ url for remote servers) only — never secrets.
+export const McpServerInfoSchema = z
+  .object({
+    name: z.string(),
+    transport: z.string().default("stdio"),
+    url: z.string().optional(),
+  })
+  .loose();
+
+// GET /api/runtimes/{id}/mcp — the runtime's machine pool plus its latest probe
+// results. Both arrays default to empty so a drifted/partial body never throws.
+export const RuntimeMcpSchema = z
+  .object({
+    servers: z.array(McpServerInfoSchema).default([]),
+    probe_results: z.array(McpProbeServerResultSchema).default([]),
+  })
+  .loose();
+
+export const EMPTY_RUNTIME_MCP: {
+  servers: never[];
+  probe_results: never[];
+} = { servers: [], probe_results: [] };
+
 // Response of POST /api/agents/{id}/mcp/oauth/start: the URL the FE opens in a
 // popup to let the user sign in. Empty fallback => "couldn't start auth".
 export const McpOauthStartSchema = z

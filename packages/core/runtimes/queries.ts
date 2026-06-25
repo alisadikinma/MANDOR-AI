@@ -13,7 +13,18 @@ export const runtimeKeys = {
   usageByHour: (rid: string, days: number, tz: string) =>
     ["runtimes", "usage", "by-hour", rid, days, tz] as const,
   latestVersion: () => ["runtimes", "latestVersion"] as const,
+  mcp: (rid: string) => ["runtimes", "mcp", rid] as const,
 };
+
+// The runtime's reported MCP pool + latest probe results. Read-only mirror of
+// what's configured on the runtime host; agents reuse it.
+export function runtimeMcpOptions(runtimeId: string) {
+  return queryOptions({
+    queryKey: runtimeKeys.mcp(runtimeId),
+    queryFn: () => api.getRuntimeMcp(runtimeId),
+    staleTime: 30 * 1000,
+  });
+}
 
 // `tz` is the viewer's IANA name — all reports follow the viewer's tz.
 export function runtimeUsageOptions(

@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent } from "@multica/core/types";
@@ -12,8 +12,19 @@ import enAgents from "../../../locales/en/agents.json";
 
 const TEST_RESOURCES = { en: { common: enCommon, agents: enAgents } };
 
-// McpConfigTab mounts the connector directory (a TanStack Query consumer),
-// so every render needs a QueryClient + I18n provider in scope.
+// The tab reads its runtime's pool via api.getRuntimeMcp (through
+// runtimeMcpOptions). Mock the API and let the real query run.
+const getRuntimeMcp = vi.fn();
+vi.mock("@multica/core/api", () => ({
+  api: { getRuntimeMcp: (...a: unknown[]) => getRuntimeMcp(...a) },
+}));
+
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+
+import { McpConfigTab } from "./mcp-config-tab";
+
 function Providers({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -26,15 +37,6 @@ function Providers({ children }: { children: ReactNode }) {
     </QueryClientProvider>
   );
 }
-
-vi.mock("sonner", () => ({
-  toast: {
-    error: vi.fn(),
-    success: vi.fn(),
-  },
-}));
-
-import { McpConfigTab } from "./mcp-config-tab";
 
 const baseAgent: Agent = {
   id: "agent-1",
@@ -80,121 +82,68 @@ function renderTab(
 describe("McpConfigTab", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getRuntimeMcp.mockResolvedValue({ servers: [], probe_results: [] });
   });
 
-  it("renders a read-only redacted state when the server omitted the value", () => {
-    // mcp_config_redacted means the server knows there IS a config but
-    // hid it from this caller. The tab must NOT expose any editor or input —
-    // not even an empty one a non-privileged member could overwrite from.
+  it("renders a read-only redacted state without any checkboxes", () => {
     renderTab({ mcp_config: null, mcp_config_redacted: true });
-
     expect(screen.getByText(/hidden from your view/i)).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(
-      screen.queryByLabelText(/installed connectors/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    // Redacted view must not even fetch the pool.
+    expect(getRuntimeMcp).not.toHaveBeenCalled();
   });
 
-  it("offers Browse connectors and an empty hint when no servers are set", () => {
+  it("shows an empty hint and reports not-dirty when the runtime has no servers", async () => {
     const { onDirtyChange } = renderTab({ mcp_config: null });
-
     expect(
-      screen.getByRole("button", { name: /browse connectors/i }),
+      await screen.findByText(/reports no MCP servers/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/no connectors yet/i)).toBeInTheDocument();
-    // The list-only tab has no draft, so it must report not-dirty so the
-    // parent never raises its discard-changes dialog for MCP.
     expect(onDirtyChange).toHaveBeenCalledWith(false);
-    // No raw JSON editor remains.
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("lists each configured server from mcp_config", () => {
-    renderTab({
-      mcp_config: {
-        mcpServers: {
-          obsidian: { command: "node", args: ["main.js"] },
-          firecrawl: { command: "npx", args: ["-y", "firecrawl-mcp"] },
-        },
-      },
+  it("lists each runtime server; a disabled one is unchecked", async () => {
+    getRuntimeMcp.mockResolvedValue({
+      servers: [
+        { name: "github", transport: "stdio" },
+        { name: "figma", transport: "http", url: "https://figma.example/mcp" },
+      ],
+      probe_results: [],
     });
+    renderTab({ mcp_config: { disabledMcpServers: ["figma"] } });
 
-    expect(screen.getByText("obsidian")).toBeInTheDocument();
-    expect(screen.getByText("firecrawl")).toBeInTheDocument();
+    expect(await screen.findByText("github")).toBeInTheDocument();
+    expect(screen.getByText("figma")).toBeInTheDocument();
+    const boxes = screen.getAllByRole("checkbox");
+    expect(boxes[0]).toBeChecked(); // github inherited (enabled)
+    expect(boxes[1]).not.toBeChecked(); // figma disabled
   });
 
-  it("removing a connector saves the config without that server", async () => {
-    const user = userEvent.setup();
-    const { onSave } = renderTab({
-      mcp_config: {
-        mcpServers: {
-          obsidian: { command: "node", args: ["main.js"] },
-          firecrawl: { command: "npx" },
-        },
-      },
+  it("disabling a server writes the deny-list via onSave", async () => {
+    getRuntimeMcp.mockResolvedValue({
+      servers: [{ name: "github", transport: "stdio" }],
+      probe_results: [],
     });
-
-    await user.click(screen.getByRole("button", { name: /manage obsidian/i }));
-    await user.click(screen.getByRole("button", { name: /remove obsidian/i }));
-    await user.click(screen.getByRole("button", { name: "Remove" }));
-
-    expect(onSave).toHaveBeenCalledWith({
-      mcp_config: { mcpServers: { firecrawl: { command: "npx" } } },
-    });
+    const { onSave } = renderTab({ mcp_config: null });
+    const box = await screen.findByRole("checkbox");
+    await userEvent.click(box); // uncheck → disable github
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith({
+        mcp_config: { disabledMcpServers: ["github"] },
+      }),
+    );
   });
 
-  it("removing the last connector clears the config to null", async () => {
-    const user = userEvent.setup();
-    const { onSave } = renderTab({
-      mcp_config: { mcpServers: { obsidian: { command: "node" } } },
+  it("re-enabling the last disabled server clears mcp_config to null", async () => {
+    getRuntimeMcp.mockResolvedValue({
+      servers: [{ name: "github", transport: "stdio" }],
+      probe_results: [],
     });
-
-    await user.click(screen.getByRole("button", { name: /manage obsidian/i }));
-    await user.click(screen.getByRole("button", { name: /remove obsidian/i }));
-    await user.click(screen.getByRole("button", { name: "Remove" }));
-
-    // null is what the backend reads as "clear this column" so the daemon
-    // falls back to the CLI default instead of persisting an empty husk.
-    expect(onSave).toHaveBeenCalledWith({ mcp_config: null });
-  });
-
-  it("disabling a connector moves it into disabledMcpServers without losing config", async () => {
-    const user = userEvent.setup();
-    const { onSave } = renderTab({
-      mcp_config: {
-        mcpServers: {
-          obsidian: { command: "node", args: ["main.js"] },
-          firecrawl: { command: "npx" },
-        },
-      },
-    });
-
-    await user.click(screen.getByRole("button", { name: /manage obsidian/i }));
-    await user.click(screen.getByRole("button", { name: "Disable" }));
-
-    // The entry is preserved verbatim under the sidecar key; the dispatch
-    // layer strips it before the runtime sees it.
-    expect(onSave).toHaveBeenCalledWith({
-      mcp_config: {
-        mcpServers: { firecrawl: { command: "npx" } },
-        disabledMcpServers: { obsidian: { command: "node", args: ["main.js"] } },
-      },
-    });
-  });
-
-  it("re-enabling a disabled connector moves it back into mcpServers", async () => {
-    const user = userEvent.setup();
-    const { onSave } = renderTab({
-      mcp_config: {
-        disabledMcpServers: { obsidian: { command: "node" } },
-      },
-    });
-
-    await user.click(screen.getByRole("button", { name: /manage obsidian/i }));
-    await user.click(screen.getByRole("button", { name: "Enable" }));
-
-    expect(onSave).toHaveBeenCalledWith({
-      mcp_config: { mcpServers: { obsidian: { command: "node" } } },
-    });
+    const { onSave } = renderTab({ mcp_config: { disabledMcpServers: ["github"] } });
+    const box = await screen.findByRole("checkbox");
+    await userEvent.click(box); // check → enable github (deny-list empties)
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith({ mcp_config: null }),
+    );
   });
 });

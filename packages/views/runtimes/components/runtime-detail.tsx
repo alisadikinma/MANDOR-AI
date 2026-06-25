@@ -36,6 +36,7 @@ import { HealthBadge } from "./shared";
 import { ProviderLogo } from "./provider-logo";
 import { UpdateSection } from "./update-section";
 import { UsageSection } from "./usage-section";
+import { RuntimeMcpPanel } from "./runtime-mcp-panel";
 import { DeleteRuntimeDialog } from "./delete-runtime-dialog";
 import { useT } from "../../i18n";
 
@@ -165,6 +166,7 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
               daemonShort={daemonShort}
             />
             <UsageSection runtime={runtime} />
+            <RuntimeMcpPanel runtimeId={runtime.id} />
           </div>
 
           {/* Right rail: serving agents + diagnostics */}

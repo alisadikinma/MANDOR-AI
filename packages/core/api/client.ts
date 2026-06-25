@@ -42,6 +42,7 @@ import type {
   CreateMcpConnectorRequest,
   UpdateMcpConnectorRequest,
   McpProbeRequest,
+  RuntimeMcp,
   PersonalAccessToken,
   CreatePersonalAccessTokenRequest,
   CreatePersonalAccessTokenResponse,
@@ -200,6 +201,8 @@ import {
   McpOauthStartSchema,
   EMPTY_MCP_OAUTH_START,
   EMPTY_MCP_PROBE_REQUEST,
+  RuntimeMcpSchema,
+  EMPTY_RUNTIME_MCP,
 } from "./schemas";
 
 /** Identifies the calling client to the server.
@@ -844,21 +847,26 @@ export class ApiClient {
   // polls getMcpProbe(id) until the status is terminal. Bodies are envelope-
   // validated; a drifted response downgrades to a terminal "timeout" so the
   // UI's poll loop always ends.
-  async probeAgentMcp(agentId: string): Promise<McpProbeRequest> {
-    const raw = await this.fetch<unknown>(`/api/agents/${agentId}/mcp/probe`, {
-      method: "POST",
-    });
-    return parseWithFallback(raw, McpProbeRequestSchema, EMPTY_MCP_PROBE_REQUEST, {
-      endpoint: "POST /api/agents/{id}/mcp/probe",
+  // The runtime's machine MCP pool (name+transport+url) plus its latest probe
+  // results. Read-only mirror of what's configured on the runtime host; agents
+  // reuse this pool. Schema-validated so a drifted body downgrades to empty
+  // rather than white-screening the Runtime page.
+  async getRuntimeMcp(runtimeId: string): Promise<RuntimeMcp> {
+    const raw = await this.fetch<unknown>(`/api/runtimes/${runtimeId}/mcp`);
+    return parseWithFallback(raw, RuntimeMcpSchema, EMPTY_RUNTIME_MCP, {
+      endpoint: "GET /api/runtimes/{id}/mcp",
     });
   }
 
-  async probeWorkspaceMcp(wsId: string): Promise<McpProbeRequest> {
-    const raw = await this.fetch<unknown>(`/api/workspaces/${wsId}/mcp/probe`, {
+  // On-demand probe of the runtime's own pool. Returns a pending request (or
+  // {status:"runtime_offline"}); the caller polls getMcpProbe(id) until the
+  // status is terminal. The daemon connects each server on the host.
+  async probeRuntimeMcp(runtimeId: string): Promise<McpProbeRequest> {
+    const raw = await this.fetch<unknown>(`/api/runtimes/${runtimeId}/mcp/probe`, {
       method: "POST",
     });
     return parseWithFallback(raw, McpProbeRequestSchema, EMPTY_MCP_PROBE_REQUEST, {
-      endpoint: "POST /api/workspaces/{id}/mcp/probe",
+      endpoint: "POST /api/runtimes/{id}/mcp/probe",
     });
   }
 
@@ -869,22 +877,37 @@ export class ApiClient {
     });
   }
 
-  // Starts an in-app OAuth authorization for one remote MCP server in an
-  // agent's config. Returns the authorize URL for the caller to open in a
+  // Starts an in-app OAuth authorization for one remote MCP server in a
+  // runtime's pool. Returns the authorize URL for the caller to open in a
   // popup; the server's redirect lands on /api/mcp/oauth/callback, which seals
-  // the token and posts the result back to the opener. `origin` is the browser
-  // origin used to build the redirect URI (the OAuth round-trip returns there).
+  // the token (per workspace+resource) and posts the result back to the opener.
+  // `origin` is the browser origin used to build the redirect URI.
   async startMcpOauth(
-    agentId: string,
+    runtimeId: string,
     server: string,
     origin: string,
   ): Promise<{ authorize_url: string }> {
     const raw = await this.fetch<unknown>(
-      `/api/agents/${agentId}/mcp/oauth/start`,
+      `/api/runtimes/${runtimeId}/mcp/oauth/start`,
       { method: "POST", body: JSON.stringify({ server, origin }) },
     );
     return parseWithFallback(raw, McpOauthStartSchema, EMPTY_MCP_OAUTH_START, {
-      endpoint: "POST /api/agents/{id}/mcp/oauth/start",
+      endpoint: "POST /api/runtimes/{id}/mcp/oauth/start",
+    });
+  }
+
+  // Stores a user-supplied access token (e.g. a GitHub PAT) for one remote MCP
+  // server on a runtime — the manual fallback when the provider's OAuth server
+  // doesn't support dynamic client registration. Sealed server-side and
+  // injected as `Authorization: Bearer <token>` when the runtime connects.
+  async setMcpAccessToken(
+    runtimeId: string,
+    server: string,
+    token: string,
+  ): Promise<void> {
+    await this.fetch<unknown>(`/api/runtimes/${runtimeId}/mcp/token`, {
+      method: "POST",
+      body: JSON.stringify({ server, token }),
     });
   }
 

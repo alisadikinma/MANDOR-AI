@@ -58,6 +58,8 @@ export type {
   UpdateMcpConnectorRequest,
   McpProbeServerResult,
   McpProbeRequest,
+  McpServerInfo,
+  RuntimeMcp,
 } from "./agent";
 export type { Workspace, WorkspaceRepo, Member, MemberRole, User, MemberWithUser, Invitation } from "./workspace";
 export type { InboxItem, InboxSeverity, InboxItemType } from "./inbox";

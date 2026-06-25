@@ -745,3 +745,19 @@ export interface McpProbeRequest {
   results?: McpProbeServerResult[];
   error?: string;
 }
+
+/** One MCP server in a runtime's reported pool. Name + transport (+ url for
+ *  remote http servers) only — never secrets. */
+export interface McpServerInfo {
+  name: string;
+  transport: string;
+  url?: string;
+}
+
+/** GET /api/runtimes/{id}/mcp — the runtime's machine MCP pool (read-only
+ *  mirror) plus its latest connection-probe results. Agents on the runtime
+ *  reuse this pool; both arrays default to empty on a drifted response. */
+export interface RuntimeMcp {
+  servers: McpServerInfo[];
+  probe_results: McpProbeServerResult[];
+}

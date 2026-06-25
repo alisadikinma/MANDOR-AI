@@ -59,6 +59,7 @@ vi.mock("@multica/core/auth", () => ({
 
 vi.mock("@multica/core/runtimes", () => ({
   deriveRuntimeHealth: () => "online",
+  runtimeMcpOptions: () => ({ queryKey: ["runtimes", "mcp"], queryFn: () => null }),
 }));
 
 vi.mock("@multica/core/agents", () => ({
