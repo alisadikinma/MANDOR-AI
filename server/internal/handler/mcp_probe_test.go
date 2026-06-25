@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,8 +11,8 @@ import (
 
 func TestMcpProbeStoreLifecycle(t *testing.T) {
 	s := NewInMemoryMcpProbeStore()
-	cfg := json.RawMessage(`{"mcpServers":{"a":{"command":"x"}}}`)
-	req := s.Create("rt-1", "ws-1", cfg)
+	headers := map[string]string{"figma": "secret-bearer"}
+	req := s.Create("rt-1", "ws-1", headers)
 
 	if req.Status != McpProbePending {
 		t.Fatalf("new request status = %q, want pending", req.Status)
@@ -27,8 +28,8 @@ func TestMcpProbeStoreLifecycle(t *testing.T) {
 	if popped == nil || popped.ID != req.ID {
 		t.Fatalf("PopPending returned %v, want the created request", popped)
 	}
-	if string(popped.Config) != string(cfg) {
-		t.Fatalf("popped config = %s, want %s", popped.Config, cfg)
+	if popped.OauthHeaders["figma"] != "secret-bearer" {
+		t.Fatalf("popped oauth headers = %v, want the figma bearer", popped.OauthHeaders)
 	}
 	if popped.Status != McpProbeRunning {
 		t.Fatalf("popped status = %q, want running", popped.Status)
@@ -50,9 +51,10 @@ func TestMcpProbeStoreLifecycle(t *testing.T) {
 	if len(got.Results) != 1 || got.Results[0].ToolCount != 3 {
 		t.Fatalf("results = %+v, want one connected server with 3 tools", got.Results)
 	}
-	// The polling response must never carry the secret-bearing config.
-	if blob, _ := json.Marshal(got); string(blob) == "" || containsConfig(blob) {
-		t.Fatalf("probe JSON leaked config: %s", blob)
+	// The polling response must never carry the secret-bearing OAuth headers.
+	blob, _ := json.Marshal(got)
+	if string(blob) == "" || strings.Contains(string(blob), "secret-bearer") || containsConfig(blob) {
+		t.Fatalf("probe JSON leaked a secret: %s", blob)
 	}
 }
 
@@ -61,7 +63,9 @@ func containsConfig(blob []byte) bool {
 	_ = json.Unmarshal(blob, &m)
 	_, hasConfig := m["config"]
 	_, hasMcpServers := m["mcpServers"]
-	return hasConfig || hasMcpServers
+	_, hasOauth := m["oauth_headers"]
+	_, hasOauth2 := m["OauthHeaders"]
+	return hasConfig || hasMcpServers || hasOauth || hasOauth2
 }
 
 func TestMcpProbePendingTimeout(t *testing.T) {

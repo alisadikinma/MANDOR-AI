@@ -87,8 +87,10 @@ func TestInitiateRuntimeMcpProbeEnqueuesOwnPoolProbe(t *testing.T) {
 	if popped == nil {
 		t.Fatal("expected a pending probe enqueued for the runtime")
 	}
-	if popped.Config != nil {
-		t.Fatalf("runtime probe must carry no config, got %s", popped.Config)
+	// No server config is pushed — the daemon sources its own machine pool. No
+	// OAuth tokens are configured in this fixture, so no headers either.
+	if len(popped.OauthHeaders) != 0 {
+		t.Fatalf("runtime probe must carry no oauth headers here, got %v", popped.OauthHeaders)
 	}
 }
 

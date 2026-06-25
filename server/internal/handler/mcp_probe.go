@@ -35,13 +35,14 @@ const (
 	McpProbeTimeout   McpProbeStatus = "timeout"
 )
 
-// McpProbeRequest is a pending or completed probe. Config carries secrets and
-// is `json:"-"` so the polling UI never receives it — only per-server Results.
+// McpProbeRequest is a pending or completed probe. OauthHeaders carries bearer
+// tokens and is `json:"-"` so the polling UI never receives it — only per-server
+// Results.
 type McpProbeRequest struct {
 	ID           string                          `json:"id"`
 	RuntimeID    string                          `json:"runtime_id"`
 	WorkspaceID  string                          `json:"-"`
-	Config       json.RawMessage                 `json:"-"`
+	OauthHeaders map[string]string               `json:"-"`
 	Status       McpProbeStatus                  `json:"status"`
 	Results      []protocol.McpProbeServerResult `json:"results,omitempty"`
 	Error        string                          `json:"error,omitempty"`
@@ -96,7 +97,7 @@ func NewInMemoryMcpProbeStore() *InMemoryMcpProbeStore {
 	return &InMemoryMcpProbeStore{requests: make(map[string]*McpProbeRequest)}
 }
 
-func (s *InMemoryMcpProbeStore) Create(runtimeID, workspaceID string, config json.RawMessage) *McpProbeRequest {
+func (s *InMemoryMcpProbeStore) Create(runtimeID, workspaceID string, oauthHeaders map[string]string) *McpProbeRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -108,13 +109,13 @@ func (s *InMemoryMcpProbeStore) Create(runtimeID, workspaceID string, config jso
 
 	now := time.Now()
 	req := &McpProbeRequest{
-		ID:          randomID(),
-		RuntimeID:   runtimeID,
-		WorkspaceID: workspaceID,
-		Config:      config,
-		Status:      McpProbePending,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:           randomID(),
+		RuntimeID:    runtimeID,
+		WorkspaceID:  workspaceID,
+		OauthHeaders: oauthHeaders,
+		Status:       McpProbePending,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	s.requests[req.ID] = req
 	return req
@@ -227,8 +228,10 @@ func (h *Handler) InitiateRuntimeMcpProbe(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// nil config = "probe your own pool"; the daemon sources its machine config.
-	req := h.McpProbeStore.Create(runtimeID, uuidToString(rt.WorkspaceID), nil)
+	// The daemon sources its own machine config; we hand it only the OAuth
+	// bearer tokens (by server name) so OAuth'd servers connect when probed.
+	oauthHeaders := h.mcpOauthHeadersByServerName(r.Context(), rt.WorkspaceID, rt.ReportedMcpServers)
+	req := h.McpProbeStore.Create(runtimeID, uuidToString(rt.WorkspaceID), oauthHeaders)
 	writeJSON(w, http.StatusOK, req)
 }
 

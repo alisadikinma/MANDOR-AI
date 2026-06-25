@@ -107,9 +107,16 @@ type AgentData struct {
 	Skills        []SkillData       `json:"skills"`
 	CustomEnv     map[string]string `json:"custom_env,omitempty"`
 	CustomArgs    []string          `json:"custom_args,omitempty"`
-	McpConfig     json.RawMessage   `json:"mcp_config,omitempty"`
-	Model         string            `json:"model,omitempty"`
-	ThinkingLevel string            `json:"thinking_level,omitempty"`
+	// McpConfig is the agent's deny-list over the runtime's machine pool
+	// (`{"disabledMcpServers":[...]}` or null). The daemon assembles the
+	// effective config from its own machine pool minus these.
+	McpConfig json.RawMessage `json:"mcp_config,omitempty"`
+	// McpOauthHeaders maps a pool server name to a bearer access token the
+	// control plane holds for it (in-app OAuth / manual token). The daemon
+	// injects these as Authorization headers when building the effective config.
+	McpOauthHeaders map[string]string `json:"mcp_oauth_headers,omitempty"`
+	Model           string            `json:"model,omitempty"`
+	ThinkingLevel   string            `json:"thinking_level,omitempty"`
 }
 
 // SkillData represents a structured skill for task execution.

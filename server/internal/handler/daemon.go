@@ -931,8 +931,8 @@ func (h *Handler) processHeartbeat(ctx context.Context, rt db.AgentRuntime, supp
 	if h.McpProbeStore != nil && h.McpProbeStore.HasPending(runtimeID) {
 		if pendingProbe := h.McpProbeStore.PopPending(runtimeID); pendingProbe != nil {
 			ack.PendingMcpProbe = &protocol.DaemonHeartbeatPendingMcpProbe{
-				ID:     pendingProbe.ID,
-				Config: pendingProbe.Config,
+				ID:           pendingProbe.ID,
+				OauthHeaders: pendingProbe.OauthHeaders,
 			}
 		}
 	}
@@ -1146,30 +1146,31 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 				slog.Warn("failed to unmarshal agent custom_args", "agent_id", uuidToString(agent.ID), "error", err)
 			}
 		}
+		// The agent's mcp_config is now just its deny-list over the runtime's
+		// pool; the daemon assembles the effective config from its own machine
+		// servers minus these. Resolve the runtime's reported pool so we can
+		// hand the daemon the OAuth bearer tokens (keyed by server name) for
+		// the servers MANDOR holds a token for — the daemon injects them; the
+		// control plane never assembles or pushes the server definitions.
 		var mcpConfig json.RawMessage
 		if agent.McpConfig != nil {
 			mcpConfig = json.RawMessage(agent.McpConfig)
 		}
-		// Workspace-level MCP servers are inherited by every agent in the
-		// workspace; the agent's own config overrides by server name. Merge
-		// here so the daemon receives one effective config — it then strips
-		// the UI-only disabledMcpServers sidecar before the runtime sees it.
-		if wsMcp, err := h.Queries.GetWorkspaceMcpConfig(r.Context(), agent.WorkspaceID); err == nil && len(wsMcp) > 0 {
-			mcpConfig = mergeWorkspaceAgentMcpConfig(json.RawMessage(wsMcp), mcpConfig)
+		var oauthHeaders map[string]string
+		if rt, err := h.Queries.GetAgentRuntime(r.Context(), agent.RuntimeID); err == nil {
+			oauthHeaders = h.mcpOauthHeadersByServerName(r.Context(), agent.WorkspaceID, rt.ReportedMcpServers)
 		}
-		// Inject Bearer headers for any MCP server the workspace has an in-app
-		// OAuth token for, so the runtime connects without doing its own OAuth.
-		mcpConfig = h.injectMcpOauthHeaders(r.Context(), agent.WorkspaceID, mcpConfig)
 		resp.Agent = &TaskAgentData{
-			ID:            uuidToString(agent.ID),
-			Name:          agent.Name,
-			Instructions:  agent.Instructions,
-			Skills:        skills,
-			CustomEnv:     customEnv,
-			CustomArgs:    customArgs,
-			McpConfig:     mcpConfig,
-			Model:         agent.Model.String,
-			ThinkingLevel: agent.ThinkingLevel.String,
+			ID:              uuidToString(agent.ID),
+			Name:            agent.Name,
+			Instructions:    agent.Instructions,
+			Skills:          skills,
+			CustomEnv:       customEnv,
+			CustomArgs:      customArgs,
+			McpConfig:       mcpConfig,
+			McpOauthHeaders: oauthHeaders,
+			Model:           agent.Model.String,
+			ThinkingLevel:   agent.ThinkingLevel.String,
 		}
 	}
 

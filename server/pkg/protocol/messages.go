@@ -205,8 +205,11 @@ type DaemonHeartbeatPendingModelList struct {
 // disabledMcpServers sidecar — the daemon applies its runtime strip before
 // probing so it tests exactly what a real task run would use.
 type DaemonHeartbeatPendingMcpProbe struct {
-	ID     string          `json:"id"`
-	Config json.RawMessage `json:"config"`
+	ID string `json:"id"`
+	// OauthHeaders maps a pool server name to a bearer token MANDOR holds for
+	// it, so the daemon can connect OAuth'd servers when probing its own pool.
+	// No server config travels here — the daemon sources that from the host.
+	OauthHeaders map[string]string `json:"oauth_headers,omitempty"`
 }
 
 // DaemonHeartbeatPendingLocalSkills describes a request for the runtime's

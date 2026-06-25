@@ -1419,7 +1419,7 @@ func (d *Daemon) handleHeartbeatActions(ctx context.Context, runtimeID string, r
 		}
 	}
 	if resp.PendingMcpProbe != nil {
-		go d.handleMcpProbe(ctx, runtimeID, resp.PendingMcpProbe.ID)
+		go d.handleMcpProbe(ctx, runtimeID, resp.PendingMcpProbe.ID, resp.PendingMcpProbe.OauthHeaders)
 	}
 	if resp.PendingLocalSkills != nil {
 		if rt := d.findRuntime(runtimeID); rt != nil {
@@ -1447,17 +1447,19 @@ func (d *Daemon) handleHeartbeatActions(ctx context.Context, runtimeID string, r
 // fails to connect is reported as a per-server "failed" result, never as a
 // request-level error: the UI wants to show which servers connected and which
 // didn't.
-func (d *Daemon) handleMcpProbe(ctx context.Context, runtimeID, requestID string) {
+func (d *Daemon) handleMcpProbe(ctx context.Context, runtimeID, requestID string, oauthHeaders map[string]string) {
 	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	var config json.RawMessage
 	if rt := d.findRuntime(runtimeID); rt != nil && rt.Provider != "" {
-		cfg, err := execenv.MachineMcpConfigJSON(rt.Provider, "")
+		machine, err := execenv.MachineMcpConfigJSON(rt.Provider, "")
 		if err != nil {
 			d.logger.Warn("mcp probe: resolve machine config", "runtime_id", runtimeID, "provider", rt.Provider, "error", err)
 		}
-		config = cfg
+		// Probe tests the whole pool (no agent deny-list), with OAuth bearer
+		// headers injected so authenticated servers connect.
+		config = execenv.BuildEffectiveMcpConfig(machine, nil, oauthHeaders)
 	}
 	results := mcpprobe.ProbeConfig(probeCtx, config)
 
@@ -2650,10 +2652,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 	// WorkDir is the user's own path (always present) but the reuse path
 	// loses the envRoot association the GC loop needs, and re-running
 	// Prepare against a stable user path is cheap (no clone, no copy).
-	var agentMcpConfig json.RawMessage
-	if task.Agent != nil {
-		agentMcpConfig = runtimeMcpConfig(task.Agent.McpConfig)
-	}
+	agentMcpConfig := d.effectiveMcpConfig(provider, task.Agent)
 	if task.PriorWorkDir != "" && localAssignment == nil {
 		env = execenv.Reuse(execenv.ReuseParams{
 			WorkDir:      task.PriorWorkDir,
@@ -2842,8 +2841,8 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 	var mcpConfig json.RawMessage
 	if task.Agent != nil {
 		customArgs = task.Agent.CustomArgs
-		mcpConfig = runtimeMcpConfig(task.Agent.McpConfig)
 	}
+	mcpConfig = d.effectiveMcpConfig(provider, task.Agent)
 	// Two-tier model resolution: an explicit agent.model wins,
 	// then the daemon-wide MULTICA_<PROVIDER>_MODEL env var. If
 	// both are empty we deliberately pass "" through — each

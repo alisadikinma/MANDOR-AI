@@ -11,6 +11,7 @@ import (
 
 	"github.com/multica-ai/multica/server/internal/mcpoauth"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 // mcpTokenRefreshWindow refreshes a token this long before it actually expires,
@@ -39,6 +40,44 @@ func (h *Handler) injectMcpOauthHeaders(ctx context.Context, wsID pgtype.UUID, e
 		}
 	}
 	return applyBearerHeaders(effective, bearer)
+}
+
+// mcpOauthHeadersByServerName resolves the workspace's stored OAuth/manual
+// tokens to a map of pool-server-name → access token, by matching each token's
+// resource to a server URL in the runtime's reported pool. The daemon receives
+// this (instead of an assembled config) and injects the bearer into its own
+// machine config by name. Returns nil when nothing is configured or matched.
+func (h *Handler) mcpOauthHeadersByServerName(ctx context.Context, wsID pgtype.UUID, reportedPool []byte) map[string]string {
+	if h.McpOAuthBox == nil || len(reportedPool) == 0 {
+		return nil
+	}
+	tokens, err := h.Queries.ListMcpOauthTokensByWorkspace(ctx, wsID)
+	if err != nil || len(tokens) == 0 {
+		return nil
+	}
+	byResource := make(map[string]string, len(tokens))
+	for _, tok := range tokens {
+		if access := h.resolveMcpAccessToken(ctx, tok); access != "" {
+			byResource[normalizeResource(tok.Resource)] = access
+		}
+	}
+	var pool []protocol.McpServerInfo
+	if err := json.Unmarshal(reportedPool, &pool); err != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, s := range pool {
+		if s.URL == "" {
+			continue
+		}
+		if access, ok := byResource[normalizeResource(s.URL)]; ok {
+			out[s.Name] = access
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // applyBearerHeaders is the pure config transform: for each server whose URL

@@ -262,9 +262,15 @@ type TaskAgentData struct {
 	Skills        []service.AgentSkillData `json:"skills,omitempty"`
 	CustomEnv     map[string]string        `json:"custom_env,omitempty"`
 	CustomArgs    []string                 `json:"custom_args,omitempty"`
-	McpConfig     json.RawMessage          `json:"mcp_config,omitempty"`
-	Model         string                   `json:"model,omitempty"`
-	ThinkingLevel string                   `json:"thinking_level,omitempty"`
+	// McpConfig is the agent's deny-list over the runtime's pool
+	// (`{"disabledMcpServers":[...]}` or null) — never server definitions.
+	McpConfig json.RawMessage `json:"mcp_config,omitempty"`
+	// McpOauthHeaders maps a pool server name to a bearer token MANDOR holds
+	// for it, so the daemon can inject Authorization headers into its own
+	// machine config without the control plane assembling that config.
+	McpOauthHeaders map[string]string `json:"mcp_oauth_headers,omitempty"`
+	Model           string            `json:"model,omitempty"`
+	ThinkingLevel   string            `json:"thinking_level,omitempty"`
 }
 
 // taskToResponse maps a queue row to its wire shape. workspaceID is threaded
