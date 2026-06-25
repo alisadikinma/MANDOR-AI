@@ -1452,6 +1452,14 @@ func (d *Daemon) handleMcpProbe(ctx context.Context, runtimeID, requestID string
 	defer cancel()
 
 	var config json.RawMessage
+	// cliStatus is the runtime CLI's own connection view (name->connected),
+	// fetched concurrently with the probe. The probe connects as a standalone
+	// client and can't see OAuth tokens the CLI holds (e.g. a Figma server
+	// authenticated through Claude Code), so it false-negatives those as
+	// needs_auth; the CLI's view is authoritative for auth and is used below to
+	// upgrade such results. nil => unknown (don't change the probe result).
+	var cliStatus map[string]bool
+	var cliWG sync.WaitGroup
 	if rt := d.findRuntime(runtimeID); rt != nil && rt.Provider != "" {
 		machine, err := execenv.MachineMcpConfigJSON(rt.Provider, "")
 		if err != nil {
@@ -1460,8 +1468,28 @@ func (d *Daemon) handleMcpProbe(ctx context.Context, runtimeID, requestID string
 		// Probe tests the whole pool (no agent deny-list), with OAuth bearer
 		// headers injected so authenticated servers connect.
 		config = execenv.BuildEffectiveMcpConfig(machine, nil, oauthHeaders)
+
+		if entry, ok := d.cfg.Agents[rt.Provider]; ok {
+			cliWG.Add(1)
+			go func(provider, path string) {
+				defer cliWG.Done()
+				cliStatus = agent.McpStatus(probeCtx, provider, path)
+			}(rt.Provider, entry.Path)
+		}
 	}
 	results := mcpprobe.ProbeConfig(probeCtx, config)
+	cliWG.Wait()
+
+	// Upgrade probe false-negatives with the CLI's authoritative auth view: a
+	// server the CLI reports as connected is connected, even if our standalone
+	// probe couldn't authenticate it. Only upgrades — never downgrades a probe
+	// that physically completed the handshake.
+	for i := range results {
+		if results[i].Status != mcpprobe.StatusConnected && cliStatus[results[i].Name] {
+			results[i].Status = mcpprobe.StatusConnected
+			results[i].Error = ""
+		}
+	}
 
 	payload := protocol.McpProbeResultPayload{
 		Results: make([]protocol.McpProbeServerResult, 0, len(results)),
