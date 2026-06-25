@@ -220,13 +220,20 @@ func fetchServerMetadata(ctx context.Context, issuer string) (ServerMetadata, er
 	return ServerMetadata{}, fmt.Errorf("server metadata: %w", lastErr)
 }
 
+// ErrRegistrationNotPermitted means the authorization server won't let us
+// register an OAuth client automatically — either it advertises no registration
+// endpoint, or it rejects anonymous registration (e.g. Figma requires the client
+// to be allowlisted in its MCP Catalog, returning 401/403). This is a permanent,
+// server-side condition, not a transient failure: in-app OAuth can't proceed.
+var ErrRegistrationNotPermitted = fmt.Errorf("server does not allow third-party OAuth clients to register")
+
 // Register performs RFC 7591 dynamic client registration as a public PKCE
 // client (token_endpoint_auth_method=none) with the given redirect URI. If the
 // AS advertises no registration endpoint the caller must supply a pre-registered
 // client instead.
 func Register(ctx context.Context, sm ServerMetadata, redirectURI, clientName string) (Client, error) {
 	if strings.TrimSpace(sm.RegistrationEndpoint) == "" {
-		return Client{}, fmt.Errorf("authorization server does not support dynamic client registration")
+		return Client{}, ErrRegistrationNotPermitted
 	}
 	reqBody, _ := json.Marshal(map[string]any{
 		"client_name":                clientName,
@@ -246,6 +253,9 @@ func Register(ctx context.Context, sm ServerMetadata, redirectURI, clientName st
 		return Client{}, fmt.Errorf("client registration: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return Client{}, ErrRegistrationNotPermitted
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return Client{}, fmt.Errorf("client registration: http %d", resp.StatusCode)
 	}

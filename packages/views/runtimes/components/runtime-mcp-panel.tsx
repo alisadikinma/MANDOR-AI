@@ -124,6 +124,11 @@ export function RuntimeMcpPanel({ runtimeId }: { runtimeId: string }) {
       } else {
         toast.error("Sign-in was not completed.");
       }
+    } catch (e) {
+      // startMcpOauth can fail (OAuth not configured, discovery/registration
+      // error, not allowed). Don't leave a blank zombie popup with no feedback.
+      popup?.close();
+      toast.error(e instanceof Error ? e.message : "Couldn't start sign-in.");
     } finally {
       setAuthing(null);
     }

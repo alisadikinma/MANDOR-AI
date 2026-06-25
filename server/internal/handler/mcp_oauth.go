@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -123,6 +124,13 @@ func (h *Handler) InitiateRuntimeMcpOauth(w http.ResponseWriter, r *http.Request
 	client, err := mcpoauth.Register(r.Context(), disc.Server, redirectURI, "MANDOR (Multica)")
 	if err != nil {
 		slog.Warn("mcp oauth client registration failed", "server", body.Server, "err", err)
+		if errors.Is(err, mcpoauth.ErrRegistrationNotPermitted) {
+			// Permanent, server-side: the provider only accepts pre-approved
+			// OAuth clients (e.g. Figma's MCP Catalog), so in-app sign-in can't
+			// work for it. Say so plainly rather than as a transient 502.
+			writeError(w, http.StatusBadRequest, "this MCP server only accepts pre-approved OAuth clients (e.g. Figma's MCP Catalog), so in-app sign-in isn't available for it")
+			return
+		}
 		writeError(w, http.StatusBadGateway, "could not register an OAuth client with this server")
 		return
 	}
