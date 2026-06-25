@@ -16,6 +16,14 @@ fi
 echo "==> Using $ENV_FILE"
 set -a; . "$ENV_FILE"; . scripts/local-env.sh; set +a
 
+# ---------- Stop anything left over from a previous run ----------
+# A stale backend/frontend on these ports makes the new process die with
+# EADDRINUSE; the daemon is detached so it survives too. Clear them first.
+echo "==> Stopping leftover services..."
+lsof -ti:"${PORT:-8080}" | xargs kill -9 2>/dev/null || true
+lsof -ti:"${FRONTEND_PORT:-3000}" | xargs kill -9 2>/dev/null || true
+(cd server && go run ./cmd/multica daemon stop --profile local) > /dev/null 2>&1 || true
+
 # ---------- Docker (start the daemon if it isn't running) ----------
 # ensure-postgres.sh shells out to `docker compose`, which fails hard when the
 # Docker engine isn't up. Start it first and wait until it answers.
