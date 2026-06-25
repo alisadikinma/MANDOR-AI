@@ -16,6 +16,26 @@ fi
 echo "==> Using $ENV_FILE"
 set -a; . "$ENV_FILE"; . scripts/local-env.sh; set +a
 
+# ---------- Docker (start the daemon if it isn't running) ----------
+# ensure-postgres.sh shells out to `docker compose`, which fails hard when the
+# Docker engine isn't up. Start it first and wait until it answers.
+if ! docker info > /dev/null 2>&1; then
+  echo "==> Docker engine not running — starting it..."
+  case "$(uname -s)" in
+    Darwin)  open -a Docker ;;
+    Linux)   sudo systemctl start docker || true ;;
+    *)       echo "✗ Don't know how to start Docker on this OS — start it manually."; exit 1 ;;
+  esac
+  for _ in $(seq 1 60); do
+    docker info > /dev/null 2>&1 && break
+    sleep 2
+  done
+  if ! docker info > /dev/null 2>&1; then
+    echo "✗ Docker did not come up in time — start it manually and retry."; exit 1
+  fi
+  echo "✓ Docker engine ready."
+fi
+
 # ---------- Database + migrations ----------
 bash scripts/ensure-postgres.sh "$ENV_FILE"
 echo "==> Running migrations..."
