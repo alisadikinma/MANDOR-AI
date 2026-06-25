@@ -18,30 +18,6 @@ import (
 // so the runtime never receives an access token that dies mid-connection.
 const mcpTokenRefreshWindow = 60 * time.Second
 
-// injectMcpOauthHeaders adds an `Authorization: Bearer <token>` header to every
-// server in the effective mcp_config whose URL matches a stored OAuth token for
-// this workspace. This is how the tokens MANDOR obtained via the in-app
-// Authenticate flow reach the runtime — the runtime CLI never does its own
-// OAuth. Tokens near expiry are refreshed first. Best-effort: any failure
-// leaves the config unchanged rather than blocking the probe / task dispatch.
-func (h *Handler) injectMcpOauthHeaders(ctx context.Context, wsID pgtype.UUID, effective json.RawMessage) json.RawMessage {
-	if h.McpOAuthBox == nil || len(effective) == 0 {
-		return effective
-	}
-	tokens, err := h.Queries.ListMcpOauthTokensByWorkspace(ctx, wsID)
-	if err != nil || len(tokens) == 0 {
-		return effective
-	}
-
-	bearer := make(map[string]string, len(tokens))
-	for _, tok := range tokens {
-		if access := h.resolveMcpAccessToken(ctx, tok); access != "" {
-			bearer[normalizeResource(tok.Resource)] = access
-		}
-	}
-	return applyBearerHeaders(effective, bearer)
-}
-
 // mcpOauthHeadersByServerName resolves the workspace's stored OAuth/manual
 // tokens to a map of pool-server-name → access token, by matching each token's
 // resource to a server URL in the runtime's reported pool. The daemon receives
@@ -78,64 +54,6 @@ func (h *Handler) mcpOauthHeadersByServerName(ctx context.Context, wsID pgtype.U
 		return nil
 	}
 	return out
-}
-
-// applyBearerHeaders is the pure config transform: for each server whose URL
-// matches a resource in bearer, add `Authorization: Bearer <token>` unless the
-// user already set an Authorization header. Returns the input unchanged on any
-// parse failure or when nothing matched.
-func applyBearerHeaders(effective json.RawMessage, bearer map[string]string) json.RawMessage {
-	if len(bearer) == 0 || len(effective) == 0 {
-		return effective
-	}
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(effective, &root); err != nil {
-		return effective
-	}
-	serversRaw, ok := root["mcpServers"]
-	if !ok {
-		return effective
-	}
-	var servers map[string]map[string]json.RawMessage
-	if err := json.Unmarshal(serversRaw, &servers); err != nil {
-		return effective
-	}
-
-	changed := false
-	for name, entry := range servers {
-		url := entryURL(entry)
-		if url == "" {
-			continue
-		}
-		access, ok := bearer[normalizeResource(url)]
-		if !ok {
-			continue
-		}
-		headers := map[string]string{}
-		if raw, ok := entry["headers"]; ok {
-			_ = json.Unmarshal(raw, &headers)
-		}
-		// Respect an explicit Authorization the user set themselves.
-		if _, exists := headers["Authorization"]; exists {
-			continue
-		}
-		headers["Authorization"] = "Bearer " + access
-		if hb, err := json.Marshal(headers); err == nil {
-			entry["headers"] = hb
-			servers[name] = entry
-			changed = true
-		}
-	}
-	if !changed {
-		return effective
-	}
-	if sb, err := json.Marshal(servers); err == nil {
-		root["mcpServers"] = sb
-	}
-	if out, err := json.Marshal(root); err == nil {
-		return out
-	}
-	return effective
 }
 
 // resolveMcpAccessToken returns the usable access token for a row, refreshing it
@@ -202,20 +120,6 @@ func (h *Handler) refreshMcpToken(ctx context.Context, tok db.McpOauthToken) str
 		// failed; use it for this dispatch.
 	}
 	return newTok.AccessToken
-}
-
-// entryURL reads the remote endpoint from one mcpServers entry, accepting the
-// three URL spellings. Empty for stdio servers.
-func entryURL(entry map[string]json.RawMessage) string {
-	for _, key := range []string{"url", "httpUrl", "serverUrl"} {
-		if raw, ok := entry[key]; ok {
-			var s string
-			if json.Unmarshal(raw, &s) == nil && strings.TrimSpace(s) != "" {
-				return strings.TrimSpace(s)
-			}
-		}
-	}
-	return ""
 }
 
 // normalizeResource canonicalizes a resource/server URL for matching: trimmed

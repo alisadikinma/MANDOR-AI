@@ -2,7 +2,6 @@ package handler
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,29 +91,3 @@ func TestNormalizeOAuthOrigin(t *testing.T) {
 	}
 }
 
-func TestMcpServerURL(t *testing.T) {
-	cfg := json.RawMessage(`{"mcpServers":{
-		"figma":{"url":"https://mcp.figma.com/mcp"},
-		"alt":{"httpUrl":"https://alt.example/mcp"},
-		"old":{"serverUrl":"https://old.example/sse"},
-		"stdio":{"command":"npx","args":["-y","pkg"]}
-	}}`)
-	if got := mcpServerURL(cfg, "figma"); got != "https://mcp.figma.com/mcp" {
-		t.Errorf("figma url = %q", got)
-	}
-	if got := mcpServerURL(cfg, "alt"); got != "https://alt.example/mcp" {
-		t.Errorf("alt httpUrl = %q", got)
-	}
-	if got := mcpServerURL(cfg, "old"); got != "https://old.example/sse" {
-		t.Errorf("old serverUrl = %q", got)
-	}
-	if got := mcpServerURL(cfg, "stdio"); got != "" {
-		t.Errorf("stdio should have no URL, got %q", got)
-	}
-	if got := mcpServerURL(cfg, "missing"); got != "" {
-		t.Errorf("missing server should be empty, got %q", got)
-	}
-	if got := mcpServerURL(json.RawMessage(`not json`), "x"); got != "" {
-		t.Errorf("malformed config should be empty, got %q", got)
-	}
-}

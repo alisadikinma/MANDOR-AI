@@ -326,29 +326,6 @@ func normalizeOAuthOrigin(origin string) (string, bool) {
 	return u.Scheme + "://" + u.Host, true
 }
 
-// mcpServerURL extracts the remote endpoint of a named server from an effective
-// mcp_config, accepting the three URL spellings the prober understands. Empty
-// means stdio-only (not OAuth-capable) or unknown server.
-func mcpServerURL(effective json.RawMessage, name string) string {
-	var cfg struct {
-		McpServers map[string]struct {
-			URL       string `json:"url"`
-			HTTPURL   string `json:"httpUrl"`
-			ServerURL string `json:"serverUrl"`
-		} `json:"mcpServers"`
-	}
-	if err := json.Unmarshal(effective, &cfg); err != nil {
-		return ""
-	}
-	e := cfg.McpServers[name]
-	for _, u := range []string{e.URL, e.HTTPURL, e.ServerURL} {
-		if strings.TrimSpace(u) != "" {
-			return strings.TrimSpace(u)
-		}
-	}
-	return ""
-}
-
 // writeOAuthResult renders the popup-closing page. It posts a typed message to
 // the opener so the FE can re-probe on success, then closes the window.
 func writeOAuthResult(w http.ResponseWriter, success bool, errMsg string) {

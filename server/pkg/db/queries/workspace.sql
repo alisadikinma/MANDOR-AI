@@ -38,17 +38,6 @@ UPDATE workspace SET
 WHERE id = $1
 RETURNING *;
 
--- name: GetWorkspaceMcpConfig :one
-SELECT mcp_config FROM workspace
-WHERE id = $1;
-
--- name: UpdateWorkspaceMcpConfig :one
-UPDATE workspace SET
-    mcp_config = $2,
-    updated_at = now()
-WHERE id = $1
-RETURNING mcp_config;
-
 -- name: IncrementIssueCounter :one
 UPDATE workspace SET issue_counter = issue_counter + 1
 WHERE id = $1

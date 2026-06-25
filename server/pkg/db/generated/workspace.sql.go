@@ -113,18 +113,6 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 	return i, err
 }
 
-const getWorkspaceMcpConfig = `-- name: GetWorkspaceMcpConfig :one
-SELECT mcp_config FROM workspace
-WHERE id = $1
-`
-
-func (q *Queries) GetWorkspaceMcpConfig(ctx context.Context, id pgtype.UUID) ([]byte, error) {
-	row := q.db.QueryRow(ctx, getWorkspaceMcpConfig, id)
-	var mcp_config []byte
-	err := row.Scan(&mcp_config)
-	return mcp_config, err
-}
-
 const incrementIssueCounter = `-- name: IncrementIssueCounter :one
 UPDATE workspace SET issue_counter = issue_counter + 1
 WHERE id = $1
@@ -240,24 +228,4 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.McpConfig,
 	)
 	return i, err
-}
-
-const updateWorkspaceMcpConfig = `-- name: UpdateWorkspaceMcpConfig :one
-UPDATE workspace SET
-    mcp_config = $2,
-    updated_at = now()
-WHERE id = $1
-RETURNING mcp_config
-`
-
-type UpdateWorkspaceMcpConfigParams struct {
-	ID        pgtype.UUID `json:"id"`
-	McpConfig []byte      `json:"mcp_config"`
-}
-
-func (q *Queries) UpdateWorkspaceMcpConfig(ctx context.Context, arg UpdateWorkspaceMcpConfigParams) ([]byte, error) {
-	row := q.db.QueryRow(ctx, updateWorkspaceMcpConfig, arg.ID, arg.McpConfig)
-	var mcp_config []byte
-	err := row.Scan(&mcp_config)
-	return mcp_config, err
 }
