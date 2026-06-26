@@ -90,9 +90,57 @@ After the first dispatch, the leader is woken up automatically by **most subsequ
 
 Dedup applies on top of these rules: if the leader already has a `queued` or `dispatched` task on this issue, a new trigger won't enqueue a duplicate.
 
+### Standup heartbeat
+
+The triggers above are all comment-driven, which leaves one gap: if a delegated member simply **stops posting**, nothing wakes the leader and the issue freezes. To close it, a background **standup sweep** re-wakes the leader for any squad-assigned issue that is mid-flight (`todo` / `in_progress` / `in_review` / `blocked`), has had **no activity** (no issue update and no comment) for a while, and has **no in-flight task**. The leader is re-triggered with a standup note instead of a comment, and acts on its instructions — chase a silent member, bounce a handoff that misses the Definition of Done, or escalate. This is the only trigger that fires without anyone posting.
+
+Tunable via env on the server (defaults in parentheses): `SQUAD_STANDUP_INTERVAL` (`30m`, set `0` to disable), `SQUAD_STANDUP_STALE_AFTER` (`2h`), `SQUAD_STANDUP_STARTUP_DELAY` (`1m`, staggers the first sweep after boot), `SQUAD_STANDUP_BATCH_LIMIT` (`50`).
+
 <Callout type="info">
 **Why the leader doesn't trigger when a member posts an `@`-mention.** Once a squad member directly `@`s someone, that comment is a deliberate hand-off — having the leader wake up to "observe" the routing would just produce a no-op turn and clutter the timeline. Agent-authored comments are the exception: when an agent posts a result that `@`s another agent, the leader still wakes up so it can coordinate the thread.
 </Callout>
+
+## Recommended instructions: a Scrum operating template
+
+The hard-coded Operating Protocol only says *how to delegate*. It does not say *who owns what*, *when work is ready to start*, or *how to tell a real "done" from a claimed one* — and without those, a leader tends to do everything itself, and members hand off half-finished work that stalls downstream. Encode the process in the **Squad Instructions** field. A good starting point you can paste and adapt:
+
+```text
+We run this squad as a Scrum team. You (leader) are the coordinator, not the worker.
+
+Roles — pull work to the right person, never do it yourself unless no member fits:
+- The human reporter is the Product Owner: they own priority and FINAL acceptance.
+- You coordinate the process: split the work, delegate, VERIFY, and unblock.
+- Members are the doers. Delegate to the member whose role fits and let them own the "how".
+
+Definition of Ready (gate BEFORE you delegate build/dev work):
+- Acceptance criteria are clear, dependencies are resolved, and any design/assets the
+  work depends on already exist and are approved. If something upstream is missing,
+  delegate THAT first (e.g. design) — never hand half-ready work to a builder.
+
+Definition of Done (binary — a step is done or it is NOT; no "90% done"):
+- Design step: prototype/spec complete AND approved by the reporter.
+- Build step: implemented, tested, and integrated (PR opened/merged per the issue).
+- "Done" from a member is a CLAIM, not proof. Before you accept a handoff and move to
+  the next step, verify the output against the DoD (read the comment, links, PR). If it
+  misses the DoD, comment to bounce it back to that member with the specific gap —
+  do not pass unfinished work downstream.
+
+On every trigger — including a scheduled standup nudge with no new comment:
+- A delegated member has gone silent since you delegated? Chase them by @mention.
+- They are blocked? Escalate to the reporter.
+- Their handoff misses the DoD? Bounce it back.
+- Otherwise delegate the next step.
+Then record your evaluation and stop. Never let an issue sit silently — someone
+always owns the next action.
+```
+
+Apply it with:
+
+```bash
+multica squad update <squad-id> --instructions "...paste the block above..."
+```
+
+(The `--instructions` flag takes an inline string; multi-line is fine when quoted by your shell.)
 
 ## `@`-mention a squad in a comment
 

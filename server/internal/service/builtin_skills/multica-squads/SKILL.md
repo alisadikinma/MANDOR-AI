@@ -177,6 +177,18 @@ Current behavior: resolve the squad, read `leader_id`, enqueue a leader task,
 and use the current comment as the trigger comment. It does not enqueue every
 squad member.
 
+## Standup heartbeat
+
+Comment triggers leave a gap: if a delegated member stops posting, nothing wakes
+the leader and the issue freezes. A background standup sweep on the server
+(`runSquadStandupScheduler`) closes it. On each tick it re-wakes the leader for
+every squad-assigned issue that is mid-flight (`todo` / `in_progress` /
+`in_review` / `blocked`), has had no activity (no issue update and no comment)
+since the cutoff, and has no in-flight task. The leader task carries a literal
+standup summary instead of a trigger comment. Tunables (env):
+`SQUAD_STANDUP_INTERVAL` (default `30m`, `0` disables), `SQUAD_STANDUP_STALE_AFTER`
+(`2h`), `SQUAD_STANDUP_STARTUP_DELAY` (`1m`), `SQUAD_STANDUP_BATCH_LIMIT` (`50`).
+
 ## Autopilot behavior
 
 Autopilots can be assigned to squads. For `assignee_type = "squad"`:

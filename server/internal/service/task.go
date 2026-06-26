@@ -498,7 +498,7 @@ func (s *TaskService) enqueueIssueTask(ctx context.Context, issue db.Issue, trig
 // Unlike EnqueueTaskForIssue, this takes an explicit agent ID rather than
 // deriving it from the issue assignee.
 func (s *TaskService) EnqueueTaskForMention(ctx context.Context, issue db.Issue, agentID pgtype.UUID, triggerCommentID pgtype.UUID) (db.AgentTaskQueue, error) {
-	return s.enqueueMentionTask(ctx, issue, agentID, triggerCommentID, false, false)
+	return s.enqueueMentionTask(ctx, issue, agentID, triggerCommentID, pgtype.Text{}, false, false)
 }
 
 // EnqueueTaskForSquadLeader is the leader-role variant of EnqueueTaskForMention.
@@ -508,10 +508,20 @@ func (s *TaskService) EnqueueTaskForMention(ctx context.Context, issue db.Issue,
 // as a worker (do not skip). This matters for agents that are simultaneously
 // the leader and a worker of the same squad — see migration 090.
 func (s *TaskService) EnqueueTaskForSquadLeader(ctx context.Context, issue db.Issue, leaderID pgtype.UUID, triggerCommentID pgtype.UUID) (db.AgentTaskQueue, error) {
-	return s.enqueueMentionTask(ctx, issue, leaderID, triggerCommentID, true, false)
+	return s.enqueueMentionTask(ctx, issue, leaderID, triggerCommentID, pgtype.Text{}, true, false)
 }
 
-func (s *TaskService) enqueueMentionTask(ctx context.Context, issue db.Issue, agentID pgtype.UUID, triggerCommentID pgtype.UUID, isLeader bool, forceFreshSession bool) (db.AgentTaskQueue, error) {
+// EnqueueStandupForSquadLeader re-wakes a squad leader for a periodic standup
+// check, carrying a literal trigger summary instead of a comment-derived one
+// (there is no triggering comment — the scheduler noticed the issue went
+// silent). The leader re-reads the issue and, per its squad instructions,
+// chases a silent member, bounces a handoff that misses the Definition of
+// Done, or escalates.
+func (s *TaskService) EnqueueStandupForSquadLeader(ctx context.Context, issue db.Issue, leaderID pgtype.UUID, summary string) (db.AgentTaskQueue, error) {
+	return s.enqueueMentionTask(ctx, issue, leaderID, pgtype.UUID{}, util.StrToText(summary), true, false)
+}
+
+func (s *TaskService) enqueueMentionTask(ctx context.Context, issue db.Issue, agentID pgtype.UUID, triggerCommentID pgtype.UUID, triggerSummary pgtype.Text, isLeader bool, forceFreshSession bool) (db.AgentTaskQueue, error) {
 	agent, err := s.Queries.GetAgent(ctx, agentID)
 	if err != nil {
 		slog.Error("mention task enqueue failed: agent not found", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID), "error", err)
@@ -526,13 +536,20 @@ func (s *TaskService) enqueueMentionTask(ctx context.Context, issue db.Issue, ag
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
+	// A caller may hand us a literal summary (e.g. the standup scheduler, which
+	// has no triggering comment); otherwise derive it from the comment.
+	summary := triggerSummary
+	if !summary.Valid {
+		summary = s.buildCommentTriggerSummary(ctx, triggerCommentID)
+	}
+
 	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID:           agentID,
 		RuntimeID:         agent.RuntimeID,
 		IssueID:           issue.ID,
 		Priority:          priorityToInt(issue.Priority),
 		TriggerCommentID:  triggerCommentID,
-		TriggerSummary:    s.buildCommentTriggerSummary(ctx, triggerCommentID),
+		TriggerSummary:    summary,
 		IsLeaderTask:      pgtype.Bool{Bool: isLeader, Valid: isLeader},
 		ForceFreshSession: pgtype.Bool{Bool: forceFreshSession, Valid: forceFreshSession},
 	})
@@ -1602,7 +1619,7 @@ func (s *TaskService) enqueueRerunTask(ctx context.Context, issue db.Issue, agen
 		util.UUIDToString(issue.AssigneeID) == util.UUIDToString(agentID) {
 		return s.enqueueIssueTask(ctx, issue, triggerCommentID, true)
 	}
-	return s.enqueueMentionTask(ctx, issue, agentID, triggerCommentID, isLeader, true)
+	return s.enqueueMentionTask(ctx, issue, agentID, triggerCommentID, pgtype.Text{}, isLeader, true)
 }
 
 // HandleFailedTasks runs the post-failure side effects for a batch of

@@ -1021,6 +1021,87 @@ func (q *Queries) ListOpenIssues(ctx context.Context, arg ListOpenIssuesParams) 
 	return items, nil
 }
 
+const listStaleSquadIssues = `-- name: ListStaleSquadIssues :many
+SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority, i.assignee_type, i.assignee_id, i.creator_type, i.creator_id, i.parent_issue_id, i.acceptance_criteria, i.context_refs, i.position, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.origin_type, i.origin_id, i.first_executed_at, i.start_date, i.metadata
+FROM issue i
+JOIN squad s
+    ON s.id = i.assignee_id
+   AND s.workspace_id = i.workspace_id
+   AND s.archived_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT max(cm.created_at) AS last_comment_at
+    FROM comment cm
+    WHERE cm.issue_id = i.id
+) c ON true
+WHERE i.assignee_type = 'squad'
+  AND i.status IN ('todo', 'in_progress', 'in_review', 'blocked')
+  AND GREATEST(i.updated_at, COALESCE(c.last_comment_at, i.updated_at)) < $1
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_task_queue atq
+      WHERE atq.issue_id = i.id
+        AND atq.status IN ('queued', 'dispatched', 'running', 'waiting_local_directory')
+  )
+ORDER BY i.updated_at ASC
+LIMIT $2
+`
+
+type ListStaleSquadIssuesParams struct {
+	Cutoff pgtype.Timestamptz `json:"cutoff"`
+	Lim    int32              `json:"lim"`
+}
+
+// Squad-assigned issues that are mid-flight (todo/in_progress/in_review/blocked)
+// but have had no activity — neither an issue update nor a comment — since the
+// cutoff, and that have no in-flight agent task. The standup scheduler feeds
+// these to the squad leader so a silently-stalled delegation gets chased,
+// bounced for not meeting the Definition of Done, or escalated. Without this,
+// a member that simply stops posting leaves the whole issue frozen because the
+// leader is only ever re-woken by a member's comment.
+func (q *Queries) ListStaleSquadIssues(ctx context.Context, arg ListStaleSquadIssuesParams) ([]Issue, error) {
+	rows, err := q.db.Query(ctx, listStaleSquadIssues, arg.Cutoff, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.Priority,
+			&i.AssigneeType,
+			&i.AssigneeID,
+			&i.CreatorType,
+			&i.CreatorID,
+			&i.ParentIssueID,
+			&i.AcceptanceCriteria,
+			&i.ContextRefs,
+			&i.Position,
+			&i.DueDate,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Number,
+			&i.ProjectID,
+			&i.OriginType,
+			&i.OriginID,
+			&i.FirstExecutedAt,
+			&i.StartDate,
+			&i.Metadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockIssueDuplicateKey = `-- name: LockIssueDuplicateKey :exec
 SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
 `

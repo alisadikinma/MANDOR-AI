@@ -139,6 +139,30 @@ Contracts:
   guards (squad.go:929-932, lastTaskWasLeader at squad.go:959) and member
   explicit-mention skip (squad.go:939-941).
 
+## Standup heartbeat
+
+Source:
+
+```text
+server/cmd/server/squad_standup_scheduler.go      # runSquadStandupScheduler, tickSquadStandup
+server/cmd/server/main.go                          # go runSquadStandupScheduler(...)
+server/pkg/db/queries/issue.sql                    # ListStaleSquadIssues
+server/internal/service/task.go                    # EnqueueStandupForSquadLeader
+```
+
+Contracts:
+
+- background sweep re-wakes the leader for stale squad issues with no comment —
+  the only non-comment leader trigger;
+- candidate = `assignee_type='squad'`, status in
+  (`todo`,`in_progress`,`in_review`,`blocked`), no activity (issue update or
+  comment) since cutoff, and no in-flight task (`ListStaleSquadIssues`);
+- leader task carries a literal standup summary, no trigger comment
+  (`EnqueueStandupForSquadLeader` → `enqueueMentionTask` summary override);
+- tunables: `SQUAD_STANDUP_INTERVAL` (`30m`, `0` disables),
+  `SQUAD_STANDUP_STALE_AFTER` (`2h`), `SQUAD_STANDUP_STARTUP_DELAY` (`1m`),
+  `SQUAD_STANDUP_BATCH_LIMIT` (`50`).
+
 ## Autopilot
 
 Source:

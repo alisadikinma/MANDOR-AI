@@ -314,3 +314,36 @@ UPDATE issue
 SET first_executed_at = now()
 WHERE id = $1 AND first_executed_at IS NULL
 RETURNING id, workspace_id, creator_type, creator_id, first_executed_at;
+
+-- name: ListStaleSquadIssues :many
+-- Squad-assigned issues that are mid-flight (todo/in_progress/in_review/blocked)
+-- but have had no activity — neither an issue update nor a comment — since the
+-- cutoff, and that have no in-flight agent task. The standup scheduler feeds
+-- these to the squad leader so a silently-stalled delegation gets chased,
+-- bounced for not meeting the Definition of Done, or escalated. Without this,
+-- a member that simply stops posting leaves the whole issue frozen because the
+-- leader is only ever re-woken by a member's comment.
+-- NOTE: issue.updated_at is NOT bumped on comment insert, so the LATERAL join to
+-- the latest comment is load-bearing — without it a recently-commented issue
+-- would still look stale and trigger a false standup wake. Do not drop it.
+SELECT i.*
+FROM issue i
+JOIN squad s
+    ON s.id = i.assignee_id
+   AND s.workspace_id = i.workspace_id
+   AND s.archived_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT max(cm.created_at) AS last_comment_at
+    FROM comment cm
+    WHERE cm.issue_id = i.id
+) c ON true
+WHERE i.assignee_type = 'squad'
+  AND i.status IN ('todo', 'in_progress', 'in_review', 'blocked')
+  AND GREATEST(i.updated_at, COALESCE(c.last_comment_at, i.updated_at)) < sqlc.arg('cutoff')
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_task_queue atq
+      WHERE atq.issue_id = i.id
+        AND atq.status IN ('queued', 'dispatched', 'running', 'waiting_local_directory')
+  )
+ORDER BY i.updated_at ASC
+LIMIT sqlc.arg('lim');
