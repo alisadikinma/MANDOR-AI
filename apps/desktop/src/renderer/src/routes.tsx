@@ -169,7 +169,7 @@ export const appRoutes: RouteObject[] = [
             element: <SkillDetailPage />,
             handle: { title: "Skill" },
           },
-          { path: "vault", element: <VaultPage />, handle: { title: "AI Brain" } },
+          { path: "vault", element: <VaultPage />, handle: { title: "My AI Brain" } },
           { path: "agents", element: <DesktopAgentsPage />, handle: { title: "Agents" } },
           {
             path: "agents/:id",
