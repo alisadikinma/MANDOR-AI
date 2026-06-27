@@ -91,6 +91,7 @@
     "mermaid": "catalog:",
     "motion": "^12.38.0",
     "pinyin-pro": "3.26.0",
+    "react-force-graph-2d": "catalog:",
     "react-markdown": "^10.1.0",
     "react-qr-code": "catalog:",
     "react-resizable-panels": "^4.7.5",

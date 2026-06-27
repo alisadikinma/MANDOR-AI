@@ -4,6 +4,7 @@ export {
   useVaultTree,
   useVaultNote,
   useVaultSearch,
+  useVaultGraph,
 } from "./use-vault";
 export {
   transformWikilinks,
@@ -15,4 +16,7 @@ export type {
   VaultTreeNode,
   VaultNote,
   VaultSearchResult,
+  VaultGraph,
+  VaultGraphNode,
+  VaultGraphLink,
 } from "../api/schemas";

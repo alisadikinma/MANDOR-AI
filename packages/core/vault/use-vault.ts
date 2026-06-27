@@ -14,6 +14,7 @@ export const vaultKeys = {
   tree: (wsId: string) => ["vault", "tree", wsId] as const,
   note: (wsId: string, path: string) => ["vault", "note", wsId, path] as const,
   search: (wsId: string, q: string) => ["vault", "search", wsId, q] as const,
+  graph: (wsId: string) => ["vault", "graph", wsId] as const,
 };
 
 export function useVaultStatus(wsId: string | undefined) {
@@ -46,5 +47,13 @@ export function useVaultSearch(wsId: string | undefined, q: string) {
     queryKey: wsId ? vaultKeys.search(wsId, query) : ["vault", "search", "disabled"],
     queryFn: () => api.searchVault(wsId!, query),
     enabled: !!wsId && query.length > 0,
+  });
+}
+
+export function useVaultGraph(wsId: string | undefined) {
+  return useQuery({
+    queryKey: wsId ? vaultKeys.graph(wsId) : ["vault", "graph", "disabled"],
+    queryFn: () => api.getVaultGraph(wsId!),
+    enabled: !!wsId,
   });
 }

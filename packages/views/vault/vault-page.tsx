@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Search, BookOpen } from "lucide-react";
+import { Search, BookOpen, Network, List } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import { useCurrentWorkspace } from "@multica/core/paths";
 import { api } from "@multica/core/api";
@@ -9,6 +9,7 @@ import {
   useVaultTree,
   useVaultNote,
   useVaultSearch,
+  useVaultGraph,
   transformWikilinks,
   rewriteEmbeds,
   type VaultTreeNode,
@@ -16,6 +17,7 @@ import {
 import { ReadonlyContent } from "../editor";
 import { VaultTree } from "./vault-tree";
 import { NoteMeta } from "./note-meta";
+import { VaultGraphView } from "./vault-graph";
 
 // Flatten every file node into a name→path index so [[wikilinks]] resolve. Both
 // the full relative path and the basename (sans .md) are keyed; basenames win on
@@ -47,10 +49,18 @@ export function VaultPage() {
 
   const [selectedPath, setSelectedPath] = useState<string | undefined>(undefined);
   const [query, setQuery] = useState("");
+  // Graph is the default landing view; opening a node switches to the reader.
+  const [view, setView] = useState<"graph" | "files">("graph");
 
   const tree = useVaultTree(wsId);
   const note = useVaultNote(wsId, selectedPath);
   const search = useVaultSearch(wsId, query);
+  const graph = useVaultGraph(wsId);
+
+  const openNote = useCallback((path: string) => {
+    setSelectedPath(path);
+    setView("files");
+  }, []);
 
   const resolve = useMemo(() => buildResolver(tree.data ?? []), [tree.data]);
 
@@ -76,7 +86,25 @@ export function VaultPage() {
   const searching = query.trim().length > 0;
 
   return (
-    <div className="flex h-full min-h-0 bg-background">
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      {/* View toggle: graph (default) ↔ files */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-border p-2">
+        <ViewToggle active={view === "graph"} onClick={() => setView("graph")} icon={Network} label="Graph" />
+        <ViewToggle active={view === "files"} onClick={() => setView("files")} icon={List} label="Files" />
+      </div>
+
+      {view === "graph" ? (
+        <div className="min-h-0 flex-1">
+          {graph.isPending ? (
+            <p className="p-6 text-sm text-muted-foreground">Loading graph…</p>
+          ) : (graph.data?.nodes.length ?? 0) === 0 ? (
+            <EmptyState label="This vault has no notes yet." />
+          ) : (
+            <VaultGraphView graph={graph.data!} onSelect={openNote} />
+          )}
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1">
       {/* Left: search + tree */}
       <aside className="flex w-72 shrink-0 flex-col border-r border-border">
         <div className="border-b border-border p-2">
@@ -122,7 +150,37 @@ export function VaultPage() {
           </div>
         )}
       </main>
+        </div>
+      )}
     </div>
+  );
+}
+
+function ViewToggle({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Network;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm",
+        active
+          ? "bg-accent text-accent-foreground"
+          : "text-muted-foreground hover:bg-accent/60",
+      )}
+    >
+      <Icon className="size-3.5" />
+      {label}
+    </button>
   );
 }
 
@@ -165,11 +223,11 @@ function SearchResults({
   );
 }
 
-function EmptyState() {
+function EmptyState({ label = "Select a note to read." }: { label?: string }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
       <BookOpen className="size-8 opacity-40" />
-      <p className="text-sm">Select a note to read.</p>
+      <p className="text-sm">{label}</p>
     </div>
   );
 }

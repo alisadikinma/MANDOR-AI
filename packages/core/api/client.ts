@@ -211,10 +211,13 @@ import {
   EMPTY_VAULT_NOTE,
   VaultSearchResultsSchema,
   EMPTY_VAULT_SEARCH_RESULTS,
+  VaultGraphSchema,
+  EMPTY_VAULT_GRAPH,
   type VaultStatus,
   type VaultTreeNode,
   type VaultNote,
   type VaultSearchResult,
+  type VaultGraph,
 } from "./schemas";
 
 /** Identifies the calling client to the server.
@@ -1684,6 +1687,13 @@ export class ApiClient {
     );
     return parseWithFallback(raw, VaultSearchResultsSchema, EMPTY_VAULT_SEARCH_RESULTS, {
       endpoint: "GET /api/workspaces/{id}/vault/search",
+    });
+  }
+
+  async getVaultGraph(wsId: string): Promise<VaultGraph> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${wsId}/vault/graph`);
+    return parseWithFallback(raw, VaultGraphSchema, EMPTY_VAULT_GRAPH, {
+      endpoint: "GET /api/workspaces/{id}/vault/graph",
     });
   }
 

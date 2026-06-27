@@ -1072,3 +1072,32 @@ export const VaultSearchResultSchema = z
 export const VaultSearchResultsSchema = z.array(VaultSearchResultSchema);
 
 export const EMPTY_VAULT_SEARCH_RESULTS: VaultSearchResult[] = [];
+
+export interface VaultGraphNode {
+  /** Vault-root-relative "/"-separated path; doubles as the note `path`. */
+  id: string;
+  title: string;
+}
+
+export interface VaultGraphLink {
+  source: string;
+  target: string;
+}
+
+export interface VaultGraph {
+  nodes: VaultGraphNode[];
+  links: VaultGraphLink[];
+}
+
+export const VaultGraphSchema = z
+  .object({
+    nodes: z
+      .array(z.object({ id: z.string().default(""), title: z.string().default("") }).loose())
+      .default([]),
+    links: z
+      .array(z.object({ source: z.string().default(""), target: z.string().default("") }).loose())
+      .default([]),
+  })
+  .loose();
+
+export const EMPTY_VAULT_GRAPH: VaultGraph = { nodes: [], links: [] };

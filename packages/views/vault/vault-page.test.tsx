@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 const mockUseVaultTree = vi.fn();
 const mockUseVaultNote = vi.fn();
 const mockUseVaultSearch = vi.fn();
+const mockUseVaultGraph = vi.fn();
 
 const NOTE = {
   path: "b.md",
@@ -15,6 +16,7 @@ vi.mock("@multica/core/vault", () => ({
   useVaultTree: (...a: unknown[]) => mockUseVaultTree(...a),
   useVaultNote: (...a: unknown[]) => mockUseVaultNote(...a),
   useVaultSearch: (...a: unknown[]) => mockUseVaultSearch(...a),
+  useVaultGraph: (...a: unknown[]) => mockUseVaultGraph(...a),
   // Real transforms aren't under test here — identity keeps the body intact.
   transformWikilinks: (md: string) => md,
   rewriteEmbeds: (md: string) => md,
@@ -40,6 +42,9 @@ beforeEach(() => {
   mockUseVaultTree.mockReset();
   mockUseVaultNote.mockReset();
   mockUseVaultSearch.mockReset();
+  mockUseVaultGraph.mockReset();
+  // Empty graph → graph view shows its empty state (no react-force-graph load).
+  mockUseVaultGraph.mockReturnValue({ data: { nodes: [], links: [] }, isPending: false });
 
   mockUseVaultTree.mockReturnValue({
     data: [
@@ -60,15 +65,28 @@ beforeEach(() => {
   mockUseVaultSearch.mockReturnValue({ data: [], isPending: false });
 });
 
+// Graph is the default view; the tree/note live under the "Files" tab.
+function goFiles() {
+  fireEvent.click(screen.getByText("Files"));
+}
+
 describe("VaultPage", () => {
+  it("defaults to the graph view and shows its empty state for an empty vault", () => {
+    render(<VaultPage />);
+    expect(screen.getByText(/no notes yet/i)).toBeTruthy();
+    expect(screen.queryByText("folder")).toBeNull(); // tree hidden until Files
+  });
+
   it("renders the folder tree from useVaultTree", () => {
     render(<VaultPage />);
+    goFiles();
     expect(screen.getByText("folder")).toBeTruthy();
     expect(screen.getByText("b")).toBeTruthy(); // .md stripped for display
   });
 
   it("selecting a file loads its note and renders the body via ReadonlyContent", () => {
     render(<VaultPage />);
+    goFiles();
     expect(screen.queryByTestId("readonly")).toBeNull(); // nothing selected yet
     fireEvent.click(screen.getByText("b"));
     const body = screen.getByTestId("readonly");
@@ -77,6 +95,7 @@ describe("VaultPage", () => {
 
   it("renders frontmatter tags as chips", () => {
     render(<VaultPage />);
+    goFiles();
     fireEvent.click(screen.getByText("b"));
     expect(screen.getByText("alpha")).toBeTruthy();
     expect(screen.getByText("beta")).toBeTruthy();
