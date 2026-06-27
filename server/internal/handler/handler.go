@@ -86,6 +86,10 @@ type Config struct {
 	CloudRuntimeFleetTimeout time.Duration
 	AttachmentDownloadMode   string
 	AttachmentDownloadURLTTL time.Duration
+	// VaultPath is the absolute filesystem path to a single Obsidian vault the
+	// server serves read-only to workspace members. Empty disables the vault
+	// viewer entirely (status returns enabled:false; every other endpoint 404s).
+	VaultPath string
 }
 
 type cloudRuntimeProxy interface {
