@@ -1,7 +1,8 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import type { NodeObject } from "react-force-graph-2d";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
+import { forceX, forceY } from "d3-force";
 import type { VaultGraph } from "@multica/core/vault";
 
 // react-force-graph-2d touches `window`/canvas at import time, so defer the
@@ -24,8 +25,27 @@ export function VaultGraphView({
   onSelect: (path: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
+  const configured = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [colors, setColors] = useState({ node: "#6366f1", link: "#3f3f46", text: "#a1a1aa" });
+
+  // Tune the simulation to an Obsidian-like layout: gentle center gravity
+  // (forceX/forceY) so orphan notes pull inward instead of being flung to the
+  // edges, capped repulsion range, and shorter links so clusters stay tight.
+  // Set on the first engine tick — by then the lazily-loaded canvas has mounted
+  // and populated the ref; the guard makes it a one-shot.
+  const tuneForces = useCallback(() => {
+    if (configured.current) return;
+    const fg = fgRef.current;
+    if (!fg) return;
+    configured.current = true;
+    fg.d3Force("charge")?.strength(-60).distanceMax(220);
+    fg.d3Force("link")?.distance(30);
+    fg.d3Force("x", forceX(0).strength(0.07));
+    fg.d3Force("y", forceY(0).strength(0.07));
+    fg.d3ReheatSimulation();
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -59,6 +79,7 @@ export function VaultGraphView({
       <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Loading graph…</p>}>
         {size.width > 0 && (
           <ForceGraph2D
+            ref={fgRef}
             graphData={data}
             width={size.width}
             height={size.height}
@@ -67,7 +88,10 @@ export function VaultGraphView({
             nodeColor={() => colors.node}
             linkColor={() => colors.link}
             linkWidth={1}
-            cooldownTicks={100}
+            warmupTicks={60}
+            cooldownTicks={120}
+            onEngineTick={tuneForces}
+            onEngineStop={() => fgRef.current?.zoomToFit(400, 40)}
             onNodeClick={(node: NodeObject) => {
               const id = (node as GraphNode).id;
               if (id) onSelect(id);

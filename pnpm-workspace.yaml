@@ -35,6 +35,9 @@ catalog:
   mermaid: "^11.14.0"
   # Force-directed graph for the AI Brain (Obsidian vault) graph view
   react-force-graph-2d: "^1.27.1"
+  # d3-force — tune the graph simulation (center gravity) for an Obsidian-like layout
+  d3-force: "^3.0.0"
+  "@types/d3-force": "^3.0.10"
 
   # Icons
   lucide-react: "^1.0.1"
