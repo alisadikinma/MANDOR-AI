@@ -5,6 +5,7 @@ import { Toaster } from "@multica/ui/components/ui/sonner";
 import { cn } from "@multica/ui/lib/utils";
 import { WebProviders } from "@/components/web-providers";
 import { AccentScript } from "@/components/accent-script";
+import { PwaRegister } from "@/components/pwa-register";
 import type { SupportedLocale } from "@multica/core/i18n";
 import { RESOURCES } from "@multica/views/locales";
 import { getRequestLocale } from "@/lib/request-locale";
@@ -71,6 +72,14 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
     shortcut: ["/favicon.svg"],
+    apple: [{ url: "/icon-192.png", sizes: "192x192" }],
+  },
+  // iOS standalone (Add to Home Screen) chrome. Android reads app/manifest.ts;
+  // these fields are what iOS Safari honours for the same installed experience.
+  appleWebApp: {
+    capable: true,
+    title: "Multica",
+    statusBarStyle: "black-translucent",
   },
   openGraph: {
     type: "website",
@@ -128,6 +137,7 @@ export default async function RootLayout({
             {children}
           </WebProviders>
           <Toaster />
+          <PwaRegister />
         </ThemeProvider>
       </body>
     </html>
