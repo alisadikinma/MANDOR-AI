@@ -574,6 +574,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 						r.Get("/note", h.GetVaultNote)
 						r.Get("/file", h.GetVaultFile)
 						r.Get("/search", h.SearchVault)
+						r.Get("/graph", h.GetVaultGraph)
 					})
 					// Listing GitHub installations is member-visible so the
 					// integrations tab no longer renders blank for non-admins;

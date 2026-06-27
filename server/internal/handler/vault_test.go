@@ -376,3 +376,58 @@ func TestSafeVaultPath(t *testing.T) {
 		}
 	})
 }
+
+func TestGetVaultGraph(t *testing.T) {
+	root := t.TempDir()
+	// a → b (by basename), a → folder/c (by path), b → a (alias), self-link ignored.
+	writeVaultFile(t, root, "a.md", "see [[b]] and [[folder/c|the c note]] and [[a]]")
+	writeVaultFile(t, root, "b.md", "back to [[a#heading]]")
+	writeVaultFile(t, root, "folder/c.md", "no links here")
+	writeVaultFile(t, root, "image.png", "PNG")        // non-md → no node
+	writeVaultFile(t, root, ".obsidian/x.md", "[[a]]") // dotdir → skipped
+
+	h := newTestHandler(Config{VaultPath: root})
+	w := httptest.NewRecorder()
+	h.GetVaultGraph(w, httptest.NewRequest(http.MethodGet, "/vault/graph", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var graph vaultGraphResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &graph); err != nil {
+		t.Fatalf("decode: %v (body=%s)", err, w.Body.String())
+	}
+
+	if len(graph.Nodes) != 3 {
+		t.Fatalf("nodes = %d, want 3 (a, b, folder/c); got %+v", len(graph.Nodes), graph.Nodes)
+	}
+	titles := map[string]string{}
+	for _, n := range graph.Nodes {
+		titles[n.ID] = n.Title
+	}
+	if titles["folder/c.md"] != "c" {
+		t.Fatalf("folder/c.md title = %q, want c", titles["folder/c.md"])
+	}
+
+	want := map[string]bool{
+		"a.md\x00b.md":        true,
+		"a.md\x00folder/c.md": true,
+		"b.md\x00a.md":        true,
+	}
+	got := map[string]bool{}
+	for _, l := range graph.Links {
+		got[l.Source+"\x00"+l.Target] = true
+	}
+	if len(got) != len(want) {
+		t.Fatalf("links = %d, want %d; got %+v", len(got), len(want), graph.Links)
+	}
+	for edge := range want {
+		if !got[edge] {
+			t.Fatalf("missing edge %q in %+v", strings.ReplaceAll(edge, "\x00", "→"), graph.Links)
+		}
+	}
+	// Self-link [[a]] inside a.md must not produce an a→a edge.
+	if got["a.md\x00a.md"] {
+		t.Fatal("self-link a→a should be dropped")
+	}
+}

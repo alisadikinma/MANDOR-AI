@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -357,4 +358,117 @@ func vaultSnippet(content string, idx, matchLen int) string {
 		window += "…"
 	}
 	return window
+}
+
+type vaultGraphNode struct {
+	ID    string `json:"id"`    // "/"-separated path relative to the vault root
+	Title string `json:"title"` // filename without the .md extension
+}
+
+type vaultGraphLink struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+type vaultGraphResponse struct {
+	Nodes []vaultGraphNode `json:"nodes"`
+	Links []vaultGraphLink `json:"links"`
+}
+
+// wikilinkRE matches Obsidian `[[target]]` / `[[target|alias]]` / `![[embed]]`
+// references. Group 1 is the raw target (may carry an alias/heading, stripped
+// during resolution).
+var wikilinkRE = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
+
+// GetVaultGraph returns the vault as a node-link graph for the graph view: one
+// node per `.md` note, one link per `[[wikilink]]` that resolves to another
+// note. Targets resolve by basename (shortest-name, Obsidian's common case) or
+// by full relative path. Unresolved links and self-links are dropped.
+func (h *Handler) GetVaultGraph(w http.ResponseWriter, r *http.Request) {
+	root := h.vaultRoot(r)
+	if root == "" {
+		writeError(w, http.StatusNotFound, "vault not configured")
+		return
+	}
+
+	type note struct {
+		rel     string
+		title   string
+		content []byte
+	}
+	var notes []note
+	byBase := map[string]string{} // basename (lower) → rel; first wins
+	byPath := map[string]string{} // rel (lower) → rel
+
+	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if p != root && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		name := d.Name()
+		if strings.HasPrefix(name, ".") || !strings.EqualFold(filepath.Ext(name), ".md") {
+			return nil
+		}
+		relRaw, relErr := filepath.Rel(root, p)
+		if relErr != nil {
+			return nil
+		}
+		rel := filepath.ToSlash(relRaw)
+		title := strings.TrimSuffix(name, filepath.Ext(name))
+		content, _ := os.ReadFile(p)
+		notes = append(notes, note{rel: rel, title: title, content: content})
+		byPath[strings.ToLower(rel)] = rel
+		base := strings.ToLower(title)
+		if _, ok := byBase[base]; !ok {
+			byBase[base] = rel
+		}
+		return nil
+	})
+
+	resolve := func(target string) string {
+		key := target
+		if i := strings.IndexAny(key, "|#"); i != -1 { // drop alias / heading anchor
+			key = key[:i]
+		}
+		key = strings.ToLower(strings.TrimSpace(key))
+		if key == "" {
+			return ""
+		}
+		if dest, ok := byBase[key]; ok {
+			return dest
+		}
+		if dest, ok := byPath[key]; ok {
+			return dest
+		}
+		if dest, ok := byPath[key+".md"]; ok {
+			return dest
+		}
+		return ""
+	}
+
+	nodes := make([]vaultGraphNode, 0, len(notes))
+	links := []vaultGraphLink{}
+	seen := map[string]bool{}
+	for _, n := range notes {
+		nodes = append(nodes, vaultGraphNode{ID: n.rel, Title: n.title})
+		for _, m := range wikilinkRE.FindAllSubmatch(n.content, -1) {
+			dest := resolve(string(m[1]))
+			if dest == "" || dest == n.rel {
+				continue
+			}
+			edge := n.rel + "\x00" + dest
+			if seen[edge] {
+				continue
+			}
+			seen[edge] = true
+			links = append(links, vaultGraphLink{Source: n.rel, Target: dest})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, vaultGraphResponse{Nodes: nodes, Links: links})
 }
