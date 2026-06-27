@@ -102,6 +102,9 @@ export function WorkspaceTab() {
   const [description, setDescription] = useState(workspace?.description ?? "");
   const [context, setContext] = useState(workspace?.context ?? "");
   const [issuePrefix, setIssuePrefix] = useState(workspace?.issue_prefix ?? "");
+  const [vaultPath, setVaultPath] = useState(
+    typeof workspace?.settings?.vault_path === "string" ? workspace.settings.vault_path : "",
+  );
   const [saving, setSaving] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
@@ -132,6 +135,9 @@ export function WorkspaceTab() {
     setDescription(workspace?.description ?? "");
     setContext(workspace?.context ?? "");
     setIssuePrefix(workspace?.issue_prefix ?? "");
+    setVaultPath(
+      typeof workspace?.settings?.vault_path === "string" ? workspace.settings.vault_path : "",
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on id only; see comment above
   }, [workspace?.id]);
 
@@ -154,6 +160,9 @@ export function WorkspaceTab() {
         name,
         description,
         context,
+        // Merge into existing settings so we don't clobber other keys; the
+        // backend overwrites the whole settings object on update.
+        settings: { ...workspace.settings, vault_path: vaultPath.trim() },
         ...(includePrefix ? { issue_prefix: normalizedPrefix } : {}),
       });
       qc.setQueryData(workspaceKeys.list(), (old: Workspace[] | undefined) =>
@@ -358,6 +367,18 @@ export function WorkspaceTab() {
                   example: `${normalizedPrefix || workspace.issue_prefix}-123`,
                 })}
               </p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">{t(($) => $.workspace.vault_path_label)}</Label>
+              <Input
+                type="text"
+                value={vaultPath}
+                onChange={(e) => setVaultPath(e.target.value)}
+                disabled={!canManageWorkspace}
+                className="mt-1 font-mono"
+                placeholder="/Users/you/Obsidian-Vault"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">{t(($) => $.workspace.vault_path_hint)}</p>
             </div>
             <div className="flex items-center justify-end gap-2 pt-1">
               <Button

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -9,8 +10,46 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/multica-ai/multica/server/internal/util"
 	"gopkg.in/yaml.v3"
 )
+
+// vaultRoot resolves the vault root directory for the request's workspace: the
+// per-workspace `settings.vault_path` (set in workspace settings) if present,
+// otherwise the operator-wide VAULT_PATH default from config. Returns "" when
+// neither is configured — handlers then report disabled / 404.
+func (h *Handler) vaultRoot(r *http.Request) string {
+	if p := h.workspaceVaultPath(r); p != "" {
+		return p
+	}
+	return strings.TrimSpace(h.cfg.VaultPath)
+}
+
+// workspaceVaultPath reads settings.vault_path from the request's workspace
+// row. Any failure (no workspace id in context — e.g. direct unit-test calls,
+// bad UUID, DB error, missing key) degrades to "" so vaultRoot falls back to
+// the config default.
+func (h *Handler) workspaceVaultPath(r *http.Request) string {
+	id := workspaceIDFromURL(r, "id")
+	if id == "" {
+		return ""
+	}
+	uid, err := util.ParseUUID(id)
+	if err != nil {
+		return ""
+	}
+	ws, err := h.Queries.GetWorkspace(r.Context(), uid)
+	if err != nil {
+		return ""
+	}
+	var s struct {
+		VaultPath string `json:"vault_path"`
+	}
+	if len(ws.Settings) > 0 {
+		_ = json.Unmarshal(ws.Settings, &s)
+	}
+	return strings.TrimSpace(s.VaultPath)
+}
 
 // safeVaultPath resolves a caller-supplied relative path against the configured
 // vault root and guarantees the result stays inside that root. It is the single
@@ -71,18 +110,19 @@ type vaultTreeNode struct {
 // GetVaultStatus reports whether a vault is configured, so the client can hide
 // the Vault nav entry when VAULT_PATH is unset. It never touches the FS.
 func (h *Handler) GetVaultStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"enabled": h.cfg.VaultPath != ""})
+	writeJSON(w, http.StatusOK, map[string]bool{"enabled": h.vaultRoot(r) != ""})
 }
 
 // GetVaultTree returns the vault's folder/.md tree. Dotfiles (.obsidian, .git,
 // .trash, …) and non-.md files are excluded; dirs sort before files, each group
 // alphabetically (case-insensitive).
 func (h *Handler) GetVaultTree(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.VaultPath == "" {
+	root := h.vaultRoot(r)
+	if root == "" {
 		writeError(w, http.StatusNotFound, "vault not configured")
 		return
 	}
-	children, err := readVaultDir(h.cfg.VaultPath, "")
+	children, err := readVaultDir(root, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to read vault")
 		return
@@ -131,7 +171,8 @@ type vaultNoteResponse struct {
 // the remaining markdown body. The `path` query param is confined to the vault
 // via safeVaultPath before any read.
 func (h *Handler) GetVaultNote(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.VaultPath == "" {
+	root := h.vaultRoot(r)
+	if root == "" {
 		writeError(w, http.StatusNotFound, "vault not configured")
 		return
 	}
@@ -140,7 +181,7 @@ func (h *Handler) GetVaultNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "path is required")
 		return
 	}
-	abs, err := safeVaultPath(h.cfg.VaultPath, rel)
+	abs, err := safeVaultPath(root, rel)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return
@@ -199,7 +240,8 @@ func splitFrontmatter(data []byte) (map[string]any, string) {
 // rendering). Content-Type is set by http.ServeContent from the file extension.
 // The `path` query param is confined to the vault before any read.
 func (h *Handler) GetVaultFile(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.VaultPath == "" {
+	root := h.vaultRoot(r)
+	if root == "" {
 		writeError(w, http.StatusNotFound, "vault not configured")
 		return
 	}
@@ -208,7 +250,7 @@ func (h *Handler) GetVaultFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "path is required")
 		return
 	}
-	abs, err := safeVaultPath(h.cfg.VaultPath, rel)
+	abs, err := safeVaultPath(root, rel)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return
@@ -242,7 +284,8 @@ const vaultSearchLimit = 50
 // contents, returning up to vaultSearchLimit results with a context snippet for
 // content matches. An empty `q` returns an empty list — never the whole vault.
 func (h *Handler) SearchVault(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.VaultPath == "" {
+	root := h.vaultRoot(r)
+	if root == "" {
 		writeError(w, http.StatusNotFound, "vault not configured")
 		return
 	}
@@ -253,7 +296,6 @@ func (h *Handler) SearchVault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lq := strings.ToLower(q)
-	root := h.cfg.VaultPath
 
 	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
