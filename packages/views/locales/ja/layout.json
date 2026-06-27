@@ -1,8 +1,8 @@
 {
   "nav": {
     "inbox": "インボックス",
-    "my_issues": "マイイシュー",
-    "issues": "イシュー",
+    "my_issues": "マイチケット",
+    "issues": "チケット",
     "projects": "プロジェクト",
     "autopilots": "オートパイロット",
     "agents": "エージェント",
@@ -10,6 +10,7 @@
     "usage": "使用量",
     "runtimes": "ランタイム",
     "skills": "スキル",
+    "vault": "ナレッジベース",
     "settings": "設定"
   },
   "help": {
@@ -31,7 +32,7 @@
     "invitation_join": "参加",
     "invitation_decline": "辞退",
     "log_out": "ログアウト",
-    "new_issue": "新規イシュー",
+    "new_issue": "新規チケット",
     "new_issue_shortcut": "C",
     "pinned_label": "ピン留め済み",
     "workspace_group": "ワークスペース",

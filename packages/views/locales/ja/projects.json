@@ -58,13 +58,13 @@
     "section_progress": "進捗",
     "section_description": "説明",
     "description_placeholder": "説明を追加...",
-    "empty_issues_title": "リンクされたイシューはありません",
-    "empty_issues_hint": "新しいイシューを作成するか、既存のイシューをこのプロジェクトに割り当ててください。",
-    "empty_issues_new_button": "新規イシュー",
-    "no_issues_yet": "イシューはまだありません",
+    "empty_issues_title": "リンクされたチケットはありません",
+    "empty_issues_hint": "新しいチケットを作成するか、既存のチケットをこのプロジェクトに割り当ててください。",
+    "empty_issues_new_button": "新規チケット",
+    "no_issues_yet": "チケットはまだありません",
     "toast_link_copied": "リンクをコピーしました",
     "toast_project_deleted": "プロジェクトを削除しました",
-    "toast_move_issue_failed": "イシューを移動できませんでした"
+    "toast_move_issue_failed": "チケットを移動できませんでした"
   },
   "resources": {
     "section_header": "リソース",
@@ -105,7 +105,7 @@
   },
   "delete_dialog": {
     "title": "プロジェクトを削除",
-    "description": "プロジェクトが削除されます。イシューは削除されませんが、リンクが解除されます。",
+    "description": "プロジェクトが削除されます。チケットは削除されませんが、リンクが解除されます。",
     "confirm": "削除",
     "cancel": "キャンセル"
   },

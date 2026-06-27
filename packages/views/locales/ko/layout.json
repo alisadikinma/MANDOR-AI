@@ -1,8 +1,8 @@
 {
   "nav": {
     "inbox": "인박스",
-    "my_issues": "내 이슈",
-    "issues": "이슈",
+    "my_issues": "내 티켓",
+    "issues": "티켓",
     "projects": "프로젝트",
     "autopilots": "오토파일럿",
     "agents": "에이전트",
@@ -10,6 +10,7 @@
     "usage": "사용량",
     "runtimes": "런타임",
     "skills": "스킬",
+    "vault": "지식 베이스",
     "settings": "설정"
   },
   "help": {
@@ -31,7 +32,7 @@
     "invitation_join": "참가",
     "invitation_decline": "거절",
     "log_out": "로그아웃",
-    "new_issue": "새 이슈",
+    "new_issue": "새 티켓",
     "new_issue_shortcut": "C",
     "pinned_label": "고정됨",
     "workspace_group": "워크스페이스",

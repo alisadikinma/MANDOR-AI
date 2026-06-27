@@ -20,7 +20,7 @@ function isNewer(latest: string, current: string): boolean {
   return false;
 }
 
-function runtimeNeedsUpdate(
+export function runtimeNeedsUpdate(
   rt: AgentRuntime,
   latestVersion: string,
   userId: string,
@@ -38,6 +38,10 @@ function runtimeNeedsUpdate(
       ? rt.metadata.cli_version
       : null;
   if (!cliVersion) return false;
+  // Source/dev builds report cli_version "dev" — not a semver, so isNewer()
+  // compares against NaN and always reports "outdated". A dev build is not a
+  // stale release; never prompt it to update.
+  if (cliVersion === "dev") return false;
   return isNewer(latestVersion, cliVersion);
 }
 

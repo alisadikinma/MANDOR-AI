@@ -22,7 +22,7 @@
     "archived": "보관됨"
   },
   "execution_mode": {
-    "create_issue": "이슈 생성",
+    "create_issue": "티켓 생성",
     "run_only": "실행만"
   },
   "relative_date": {
@@ -91,7 +91,7 @@
     }
   },
   "run_status": {
-    "issue_created": "이슈 생성됨",
+    "issue_created": "티켓 생성됨",
     "running": "실행 중",
     "skipped": "건너뜀",
     "completed": "완료됨",
@@ -104,7 +104,7 @@
     "api": "API"
   },
   "run": {
-    "issue_linked": "이슈 연결됨",
+    "issue_linked": "티켓 연결됨",
     "view_log": "실행 로그 보기",
     "skipped_group": {
       "label": "건너뜀",
@@ -266,12 +266,12 @@
     "next_run_label": "다음 실행:",
     "output_modes": {
       "create_issue": {
-        "label": "이슈 생성",
-        "description": "실행할 때마다 추적 가능한 이슈를 만듭니다"
+        "label": "티켓 생성",
+        "description": "실행할 때마다 추적 가능한 티켓를 만듭니다"
       },
       "run_only": {
         "label": "실행만",
-        "description": "이슈를 만들지 않고 조용히 실행합니다"
+        "description": "티켓를 만들지 않고 조용히 실행합니다"
       }
     },
     "frequency_long": {

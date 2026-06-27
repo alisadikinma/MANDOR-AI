@@ -58,6 +58,7 @@ const COL_WIDTHS = {
   status: 120,
   workload: 140,
   runtime: 200,
+  model: 160,
   activity: 100,
   runs: 64,
   // 60 = 16 left padding + 28 kebab + 16 right padding. Keeps the
@@ -68,7 +69,7 @@ const COL_WIDTHS = {
 
 type ColumnHeaderT = ReturnType<typeof useT<"agents">>["t"];
 
-function makeHeaderRenderer(t: ColumnHeaderT, key: "agent" | "status" | "workload" | "runtime" | "activity_7d" | "runs") {
+function makeHeaderRenderer(t: ColumnHeaderT, key: "agent" | "status" | "workload" | "runtime" | "model" | "activity_7d" | "runs") {
   return key === "runs"
     ? () => <div className="text-right">{t(($) => $.columns.runs)}</div>
     : () => t(($) => $.columns[key]);
@@ -117,6 +118,12 @@ export function createAgentColumns({
       size: COL_WIDTHS.runtime,
       meta: { grow: true },
       cell: ({ row }) => <RuntimeCell row={row.original} />,
+    },
+    {
+      id: "model",
+      header: makeHeaderRenderer(t, "model"),
+      size: COL_WIDTHS.model,
+      cell: ({ row }) => <ModelCell row={row.original} />,
     },
     {
       id: "activity",
@@ -327,6 +334,27 @@ function RuntimeCell({ row }: { row: AgentRow }) {
         <TooltipContent>{runtimeLabel}</TooltipContent>
       </Tooltip>
     </div>
+  );
+}
+
+function ModelCell({ row }: { row: AgentRow }) {
+  // Empty model = agent inherits the runtime's default model (the API never
+  // normalises a default in), so render an em-dash rather than a blank cell.
+  const model = row.agent.model?.trim();
+  if (!model) {
+    return <span className="text-xs text-muted-foreground/50">—</span>;
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="block min-w-0 truncate font-mono text-xs text-muted-foreground">
+            {model}
+          </span>
+        }
+      />
+      <TooltipContent>{model}</TooltipContent>
+    </Tooltip>
   );
 }
 

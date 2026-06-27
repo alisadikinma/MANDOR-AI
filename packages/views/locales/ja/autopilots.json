@@ -22,7 +22,7 @@
     "archived": "アーカイブ済み"
   },
   "execution_mode": {
-    "create_issue": "イシューを作成",
+    "create_issue": "チケットを作成",
     "run_only": "実行のみ"
   },
   "relative_date": {
@@ -91,7 +91,7 @@
     }
   },
   "run_status": {
-    "issue_created": "イシュー作成済み",
+    "issue_created": "チケット作成済み",
     "running": "実行中",
     "completed": "完了",
     "failed": "失敗",
@@ -104,7 +104,7 @@
     "api": "API"
   },
   "run": {
-    "issue_linked": "イシューをリンク済み",
+    "issue_linked": "チケットをリンク済み",
     "view_log": "実行ログを表示",
     "skipped_group": {
       "label": "スキップ済み",
@@ -266,12 +266,12 @@
     "next_run_label": "次回実行:",
     "output_modes": {
       "create_issue": {
-        "label": "イシューを作成",
-        "description": "実行のたびに追跡可能なイシューを作成します"
+        "label": "チケットを作成",
+        "description": "実行のたびに追跡可能なチケットを作成します"
       },
       "run_only": {
         "label": "実行のみ",
-        "description": "イシューを作成せず、静かに実行します"
+        "description": "チケットを作成せず、静かに実行します"
       }
     },
     "frequency_long": {

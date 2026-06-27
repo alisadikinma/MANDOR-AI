@@ -216,7 +216,7 @@ function NewTabButton() {
     const activeSlug = useTabStore.getState().activeWorkspaceSlug;
     if (!activeSlug) return;
     const path = paths.workspace(activeSlug).issues();
-    const tabId = addTab(path, "Issues", resolveRouteIcon(path));
+    const tabId = addTab(path, "Tickets", resolveRouteIcon(path));
     if (tabId) setActiveTab(tabId);
   };
 

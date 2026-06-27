@@ -99,6 +99,8 @@ This rule is aligned with `apps/docs/content/docs/*.zh.mdx` — the docs are the
 
 `issue` / `skill` / `task` are Multica's core entities. They have schema columns, API fields, and product UI labels that are all English. In Chinese text, they follow a **mixed rule** — what to use depends on where the word appears:
 
+> **Product label vs. entity name — `issue` is surfaced as "Ticket".** The user-facing product label for an `issue` is **"Ticket"** (zh **工单**, ja **チケット**, ko **티켓**) — "issue" reads as "problem" to end users, so the UI calls it a Ticket. This is a **display-copy decision only**: the entity name everywhere in code, DB columns, API fields, TS types, and routes (`/{slug}/issues`) stays `issue`. So a string in `packages/views/locales/*` says "Ticket", but `issue_status`, `IssueRow`, `paths.issues()`, and the `issue` table are unchanged. When you see "Ticket" in the UI and `issue` in the code, that is intentional, not drift.
+
 | Context | Render | Example |
 | --- | --- | --- |
 | **UI strings, state names, code references** | lowercase English | "排队中的 task"、"创建子 issue"、"为智能体注入 skill" |
