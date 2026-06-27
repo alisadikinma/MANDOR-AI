@@ -134,6 +134,22 @@
       }
     },
     {
+      "slug": "google-drive",
+      "name": "Google Drive",
+      "icon": "google-drive",
+      "description": "Create and manage Google Docs, Sheets, and files in a connected Google Drive — ideal for a Writing Agent that saves every document as a Google Doc. One-time setup on the runtime host: run `npx google-workspace-mcp setup` then `npx google-workspace-mcp accounts add <name>` to grant OAuth access (Docs + Drive scopes).",
+      "popularity": 68,
+      "input_schema": { "fields": [] },
+      "mcp_template": {
+        "mcpServers": {
+          "google-workspace": {
+            "command": "npx",
+            "args": ["-y", "google-workspace-mcp", "serve"]
+          }
+        }
+      }
+    },
+    {
       "slug": "microsoft-365",
       "name": "Microsoft 365",
       "icon": "microsoft",

@@ -164,7 +164,7 @@
       "writing": {
         "label": "Writing Agent",
         "blurb": "Drafts, summarizes, researches. Long-form friendly.",
-        "instructions": "You are a Writing Agent. Draft documents, summarize long content, and research topics on the web when needed. Structure your output as finished prose a reader can use directly — not an outline. Cite sources when you draw from them. Match the tone the user establishes in the ticket."
+        "instructions": "You are a Writing Agent. Draft documents, summarize long content, and research topics on the web when needed. Structure your output as finished prose a reader can use directly — not an outline. Cite sources when you draw from them. Match the tone the user establishes in the ticket. When Google Drive is connected, save every document you produce as a new Google Doc in Drive and reply with the link."
       },
       "assistant": {
         "label": "Assistant",
