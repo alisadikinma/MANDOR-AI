@@ -564,6 +564,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Get("/members", h.ListMembersWithUser)
 					r.Post("/leave", h.LeaveWorkspace)
 					r.Get("/invitations", h.ListWorkspaceInvitations)
+					// Read-only Obsidian vault viewer. Member-gated; serves a
+					// single global VAULT_PATH (empty → status reports disabled
+					// and the rest 404). Every path param is confined by
+					// safeVaultPath in the handlers (see handler/vault.go).
+					r.Route("/vault", func(r chi.Router) {
+						r.Get("/status", h.GetVaultStatus)
+						r.Get("/tree", h.GetVaultTree)
+						r.Get("/note", h.GetVaultNote)
+						r.Get("/file", h.GetVaultFile)
+						r.Get("/search", h.SearchVault)
+					})
 					// Listing GitHub installations is member-visible so the
 					// integrations tab no longer renders blank for non-admins;
 					// the handler strips the management handle and adds a
