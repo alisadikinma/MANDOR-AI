@@ -121,12 +121,12 @@ export const appRoutes: RouteObject[] = [
           {
             path: "issues",
             element: <IssuesPage />,
-            handle: { title: "Issues" },
+            handle: { title: "Tickets" },
           },
           {
             path: "issues/:id",
             element: <IssueDetailPage />,
-            handle: { title: "Issue" },
+            handle: { title: "Ticket" },
           },
           {
             path: "projects",
@@ -151,7 +151,7 @@ export const appRoutes: RouteObject[] = [
           {
             path: "my-issues",
             element: <MyIssuesPage />,
-            handle: { title: "My Issues" },
+            handle: { title: "My Tickets" },
           },
           {
             path: "runtimes",
@@ -169,7 +169,7 @@ export const appRoutes: RouteObject[] = [
             element: <SkillDetailPage />,
             handle: { title: "Skill" },
           },
-          { path: "vault", element: <VaultPage />, handle: { title: "Vault" } },
+          { path: "vault", element: <VaultPage />, handle: { title: "AI Brain" } },
           { path: "agents", element: <DesktopAgentsPage />, handle: { title: "Agents" } },
           {
             path: "agents/:id",

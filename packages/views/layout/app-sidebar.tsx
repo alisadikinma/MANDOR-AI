@@ -31,7 +31,7 @@ import {
   CircleUser,
   FolderKanban,
   BarChart3,
-  BookOpen,
+  Brain,
   X,
   Zap,
   Users,
@@ -139,6 +139,9 @@ type NavLabelKey =
 
 const personalNav: { key: NavKey; labelKey: NavLabelKey; icon: typeof Inbox }[] = [
   { key: "inbox", labelKey: "inbox", icon: Inbox },
+  // AI Brain (Obsidian Vault) sits right under Inbox. Gated at render on
+  // useVaultStatus — hidden unless VAULT_PATH is set.
+  { key: "vault", labelKey: "vault", icon: Brain },
   { key: "myIssues", labelKey: "my_issues", icon: CircleUser },
 ];
 
@@ -149,8 +152,6 @@ const workspaceNav: { key: NavKey; labelKey: NavLabelKey; icon: typeof Inbox }[]
   { key: "agents", labelKey: "agents", icon: Bot },
   { key: "squads", labelKey: "squads", icon: Users },
   { key: "usage", labelKey: "usage", icon: BarChart3 },
-  // Vault is gated at render on useVaultStatus — hidden unless VAULT_PATH is set.
-  { key: "vault", labelKey: "vault", icon: BookOpen },
 ];
 
 const configureNav: { key: NavKey; labelKey: NavLabelKey; icon: typeof Inbox }[] = [
@@ -377,9 +378,9 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
   // Explicit === true per CLAUDE.md API Compatibility: a missing/undefined
   // status hides the Vault entry rather than showing it on a falsy coercion.
   const vaultEnabled = useVaultStatus(wsId).data?.enabled === true;
-  const visibleWorkspaceNav = vaultEnabled
-    ? workspaceNav
-    : workspaceNav.filter((item) => item.key !== "vault");
+  const visiblePersonalNav = vaultEnabled
+    ? personalNav
+    : personalNav.filter((item) => item.key !== "vault");
   const { data: pinnedItems = EMPTY_PINS } = useQuery({
     ...pinListOptions(wsId ?? "", userId ?? ""),
     enabled: !!wsId && !!userId,
@@ -663,7 +664,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {personalNav.map((item) => {
+                {visiblePersonalNav.map((item) => {
                   const href = p[item.key]();
                   const isActive = isNavActive(pathname, href);
                   return (
@@ -732,7 +733,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
             <SidebarGroupLabel>{t(($) => $.sidebar.workspace_group)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {visibleWorkspaceNav.map((item) => {
+                {workspaceNav.map((item) => {
                   const href = p[item.key]();
                   const isActive = isNavActive(pathname, href);
                   return (

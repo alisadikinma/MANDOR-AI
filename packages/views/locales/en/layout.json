@@ -1,8 +1,8 @@
 {
   "nav": {
     "inbox": "Inbox",
-    "my_issues": "My Issues",
-    "issues": "Issues",
+    "my_issues": "My Tickets",
+    "issues": "Tickets",
     "projects": "Projects",
     "autopilots": "Autopilot",
     "agents": "Agents",
@@ -10,7 +10,7 @@
     "usage": "Usage",
     "runtimes": "Runtimes",
     "skills": "Skills",
-    "vault": "Vault",
+    "vault": "AI Brain",
     "settings": "Settings"
   },
   "help": {
@@ -32,7 +32,7 @@
     "invitation_join": "Join",
     "invitation_decline": "Decline",
     "log_out": "Log out",
-    "new_issue": "New Issue",
+    "new_issue": "New Ticket",
     "new_issue_shortcut": "C",
     "pinned_label": "Pinned",
     "workspace_group": "Workspace",

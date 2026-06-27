@@ -1,8 +1,8 @@
 {
   "nav": {
     "inbox": "收件箱",
-    "my_issues": "我的 issue",
-    "issues": "Issues",
+    "my_issues": "我的工单",
+    "issues": "工单",
     "projects": "项目",
     "autopilots": "自动化",
     "agents": "智能体",
@@ -10,7 +10,7 @@
     "usage": "用量",
     "runtimes": "运行时",
     "skills": "Skills",
-    "vault": "知识库",
+    "vault": "AI 大脑",
     "settings": "设置"
   },
   "help": {
@@ -32,7 +32,7 @@
     "invitation_join": "加入",
     "invitation_decline": "拒绝",
     "log_out": "退出登录",
-    "new_issue": "新建 issue",
+    "new_issue": "新建工单",
     "new_issue_shortcut": "C",
     "pinned_label": "固定",
     "workspace_group": "工作区",
