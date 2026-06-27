@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -118,6 +119,90 @@ func TestGetVaultTree(t *testing.T) {
 		hh.GetVaultTree(ww, httptest.NewRequest(http.MethodGet, "/vault/tree", nil))
 		if ww.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want 404", ww.Code)
+		}
+	})
+}
+
+func getVaultNote(t *testing.T, h *Handler, relPath string) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/vault/note?path="+relPath, nil)
+	h.GetVaultNote(w, req)
+	return w
+}
+
+func TestGetVaultNote(t *testing.T) {
+	root := t.TempDir()
+	writeVaultFile(t, root, "with-fm.md", "---\ntitle: Hello\ntags:\n  - alpha\n  - beta\n---\n\n# Body\n\nSome **content**.\n")
+	writeVaultFile(t, root, "plain.md", "# No frontmatter\n\nJust body.")
+	h := newTestHandler(Config{VaultPath: root})
+
+	t.Run("splits frontmatter and body", func(t *testing.T) {
+		w := getVaultNote(t, h, "with-fm.md")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body=%s)", w.Code, w.Body.String())
+		}
+		var got struct {
+			Path        string         `json:"path"`
+			Frontmatter map[string]any `json:"frontmatter"`
+			Body        string         `json:"body"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Path != "with-fm.md" {
+			t.Fatalf("path = %q", got.Path)
+		}
+		if got.Frontmatter["title"] != "Hello" {
+			t.Fatalf("title = %v, want Hello", got.Frontmatter["title"])
+		}
+		tags, ok := got.Frontmatter["tags"].([]any)
+		if !ok || len(tags) != 2 || tags[0] != "alpha" || tags[1] != "beta" {
+			t.Fatalf("tags = %v, want [alpha beta]", got.Frontmatter["tags"])
+		}
+		if !strings.Contains(got.Body, "# Body") || strings.Contains(got.Body, "title: Hello") {
+			t.Fatalf("body not split correctly: %q", got.Body)
+		}
+	})
+
+	t.Run("note without frontmatter returns empty map + full body", func(t *testing.T) {
+		w := getVaultNote(t, h, "plain.md")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", w.Code)
+		}
+		var got struct {
+			Frontmatter map[string]any `json:"frontmatter"`
+			Body        string         `json:"body"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Frontmatter) != 0 {
+			t.Fatalf("frontmatter = %v, want empty", got.Frontmatter)
+		}
+		if got.Body != "# No frontmatter\n\nJust body." {
+			t.Fatalf("body = %q", got.Body)
+		}
+	})
+
+	t.Run("traversal path is rejected with 400 before any read", func(t *testing.T) {
+		w := getVaultNote(t, h, "../../etc/passwd")
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", w.Code)
+		}
+	})
+
+	t.Run("missing file returns 404", func(t *testing.T) {
+		w := getVaultNote(t, h, "does-not-exist.md")
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404", w.Code)
+		}
+	})
+
+	t.Run("empty path returns 400", func(t *testing.T) {
+		w := getVaultNote(t, h, "")
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", w.Code)
 		}
 	})
 }

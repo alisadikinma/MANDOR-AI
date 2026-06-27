@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // safeVaultPath resolves a caller-supplied relative path against the configured
@@ -117,4 +119,78 @@ func readVaultDir(absDir, relDir string) ([]vaultTreeNode, error) {
 	sort.Slice(dirs, func(i, j int) bool { return strings.ToLower(dirs[i].Name) < strings.ToLower(dirs[j].Name) })
 	sort.Slice(files, func(i, j int) bool { return strings.ToLower(files[i].Name) < strings.ToLower(files[j].Name) })
 	return append(dirs, files...), nil
+}
+
+type vaultNoteResponse struct {
+	Path        string         `json:"path"`
+	Frontmatter map[string]any `json:"frontmatter"`
+	Body        string         `json:"body"`
+}
+
+// GetVaultNote returns a single note split into its parsed YAML frontmatter and
+// the remaining markdown body. The `path` query param is confined to the vault
+// via safeVaultPath before any read.
+func (h *Handler) GetVaultNote(w http.ResponseWriter, r *http.Request) {
+	if h.cfg.VaultPath == "" {
+		writeError(w, http.StatusNotFound, "vault not configured")
+		return
+	}
+	rel := r.URL.Query().Get("path")
+	if rel == "" {
+		writeError(w, http.StatusBadRequest, "path is required")
+		return
+	}
+	abs, err := safeVaultPath(h.cfg.VaultPath, rel)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "note not found")
+		return
+	}
+	fm, body := splitFrontmatter(data)
+	writeJSON(w, http.StatusOK, vaultNoteResponse{Path: rel, Frontmatter: fm, Body: body})
+}
+
+// splitFrontmatter separates a leading `---`-fenced YAML block from the markdown
+// body. A note with no frontmatter (or malformed/unparseable frontmatter)
+// returns an empty map and the original content as the body — the viewer must
+// always render something.
+func splitFrontmatter(data []byte) (map[string]any, string) {
+	fm := map[string]any{}
+	s := string(data)
+
+	rest, ok := strings.CutPrefix(s, "---\n")
+	if !ok {
+		rest, ok = strings.CutPrefix(s, "---\r\n")
+	}
+	if !ok {
+		return fm, s // no opening fence → all body
+	}
+
+	// Closing fence: a line containing only "---". Cover both the mid-file case
+	// (newline after) and the EOF case (no trailing newline).
+	yamlPart, body, found := "", "", false
+	for _, sep := range []string{"\n---\n", "\n---\r\n"} {
+		if idx := strings.Index(rest, sep); idx != -1 {
+			yamlPart, body, found = rest[:idx], rest[idx+len(sep):], true
+			break
+		}
+	}
+	if !found {
+		if trimmed, ok := strings.CutSuffix(rest, "\n---"); ok {
+			yamlPart, body, found = trimmed, "", true
+		}
+	}
+	if !found {
+		return fm, s // opening fence but no closing one → treat as plain body
+	}
+
+	if err := yaml.Unmarshal([]byte(yamlPart), &fm); err != nil || fm == nil {
+		// Non-map or invalid YAML — degrade to no frontmatter rather than error.
+		return map[string]any{}, body
+	}
+	return fm, body
 }
