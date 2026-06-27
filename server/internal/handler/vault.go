@@ -2,8 +2,11 @@ package handler
 
 import (
 	"errors"
+	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -51,4 +54,67 @@ func safeVaultPath(root, rel string) (string, error) {
 		return "", errors.New("path escapes the vault root")
 	}
 	return joined, nil
+}
+
+// vaultTreeNode is one entry in the folder tree. Path is relative to the vault
+// root and always "/"-separated (so the frontend and the `path` query param
+// agree regardless of the server OS). Children is present only for dirs.
+type vaultTreeNode struct {
+	Name     string          `json:"name"`
+	Path     string          `json:"path"`
+	Type     string          `json:"type"` // "dir" | "file"
+	Children []vaultTreeNode `json:"children,omitempty"`
+}
+
+// GetVaultStatus reports whether a vault is configured, so the client can hide
+// the Vault nav entry when VAULT_PATH is unset. It never touches the FS.
+func (h *Handler) GetVaultStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"enabled": h.cfg.VaultPath != ""})
+}
+
+// GetVaultTree returns the vault's folder/.md tree. Dotfiles (.obsidian, .git,
+// .trash, …) and non-.md files are excluded; dirs sort before files, each group
+// alphabetically (case-insensitive).
+func (h *Handler) GetVaultTree(w http.ResponseWriter, r *http.Request) {
+	if h.cfg.VaultPath == "" {
+		writeError(w, http.StatusNotFound, "vault not configured")
+		return
+	}
+	children, err := readVaultDir(h.cfg.VaultPath, "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to read vault")
+		return
+	}
+	writeJSON(w, http.StatusOK, children)
+}
+
+// readVaultDir walks absDir, returning the markdown tree rooted there. relDir is
+// the "/"-separated path of absDir relative to the vault root ("" at the root).
+func readVaultDir(absDir, relDir string) ([]vaultTreeNode, error) {
+	entries, err := os.ReadDir(absDir)
+	if err != nil {
+		return nil, err
+	}
+	var dirs, files []vaultTreeNode
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, ".") {
+			continue // hide dotfiles/dirs (.obsidian, .git, .trash, …)
+		}
+		rel := path.Join(relDir, name)
+		if e.IsDir() {
+			grandchildren, err := readVaultDir(filepath.Join(absDir, name), rel)
+			if err != nil {
+				return nil, err
+			}
+			dirs = append(dirs, vaultTreeNode{Name: name, Path: rel, Type: "dir", Children: grandchildren})
+			continue
+		}
+		if strings.EqualFold(filepath.Ext(name), ".md") {
+			files = append(files, vaultTreeNode{Name: name, Path: rel, Type: "file"})
+		}
+	}
+	sort.Slice(dirs, func(i, j int) bool { return strings.ToLower(dirs[i].Name) < strings.ToLower(dirs[j].Name) })
+	sort.Slice(files, func(i, j int) bool { return strings.ToLower(files[i].Name) < strings.ToLower(files[j].Name) })
+	return append(dirs, files...), nil
 }
