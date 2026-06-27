@@ -63,7 +63,7 @@ func TestGetVaultTree(t *testing.T) {
 	writeVaultFile(t, root, "alpha.md", "a")
 	writeVaultFile(t, root, "folder/inner.md", "i")
 	writeVaultFile(t, root, "folder/sub/deep.md", "d")
-	writeVaultFile(t, root, "image.png", "PNG")          // non-md → excluded
+	writeVaultFile(t, root, "image.png", "PNG")            // non-md → excluded
 	writeVaultFile(t, root, ".obsidian/config.json", "{}") // dotdir → excluded
 
 	h := newTestHandler(Config{VaultPath: root})
