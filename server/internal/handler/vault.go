@@ -194,3 +194,125 @@ func splitFrontmatter(data []byte) (map[string]any, string) {
 	}
 	return fm, body
 }
+
+// GetVaultFile serves a vault file's raw bytes (for image / `![[embed]]`
+// rendering). Content-Type is set by http.ServeContent from the file extension.
+// The `path` query param is confined to the vault before any read.
+func (h *Handler) GetVaultFile(w http.ResponseWriter, r *http.Request) {
+	if h.cfg.VaultPath == "" {
+		writeError(w, http.StatusNotFound, "vault not configured")
+		return
+	}
+	rel := r.URL.Query().Get("path")
+	if rel == "" {
+		writeError(w, http.StatusBadRequest, "path is required")
+		return
+	}
+	abs, err := safeVaultPath(h.cfg.VaultPath, rel)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+	f, err := os.Open(abs)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "file not found")
+		return
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || fi.IsDir() {
+		writeError(w, http.StatusNotFound, "file not found")
+		return
+	}
+	http.ServeContent(w, r, filepath.Base(abs), fi.ModTime(), f)
+}
+
+type vaultSearchResult struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Snippet string `json:"snippet"`
+}
+
+// vaultSearchLimit caps results so a broad query over a large vault can't blow
+// up the response. A personal vault rarely exceeds this; bump or add an index
+// only if it becomes a felt limit.
+const vaultSearchLimit = 50
+
+// SearchVault matches `q` (case-insensitive) against `.md` filenames and
+// contents, returning up to vaultSearchLimit results with a context snippet for
+// content matches. An empty `q` returns an empty list — never the whole vault.
+func (h *Handler) SearchVault(w http.ResponseWriter, r *http.Request) {
+	if h.cfg.VaultPath == "" {
+		writeError(w, http.StatusNotFound, "vault not configured")
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	results := []vaultSearchResult{}
+	if q == "" {
+		writeJSON(w, http.StatusOK, results)
+		return
+	}
+	lq := strings.ToLower(q)
+	root := h.cfg.VaultPath
+
+	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip unreadable entries, keep walking
+		}
+		if d.IsDir() {
+			if p != root && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir // skip .obsidian/.git/.trash subtrees
+			}
+			return nil
+		}
+		if len(results) >= vaultSearchLimit {
+			return filepath.SkipAll
+		}
+		name := d.Name()
+		if strings.HasPrefix(name, ".") || !strings.EqualFold(filepath.Ext(name), ".md") {
+			return nil
+		}
+
+		nameMatch := strings.Contains(strings.ToLower(name), lq)
+		snippet := ""
+		contentMatch := false
+		if content, readErr := os.ReadFile(p); readErr == nil {
+			if idx := strings.Index(strings.ToLower(string(content)), lq); idx != -1 {
+				contentMatch = true
+				snippet = vaultSnippet(string(content), idx, len(q))
+			}
+		}
+		if nameMatch || contentMatch {
+			rel, _ := filepath.Rel(root, p)
+			results = append(results, vaultSearchResult{Name: name, Path: filepath.ToSlash(rel), Snippet: snippet})
+		}
+		return nil
+	})
+
+	writeJSON(w, http.StatusOK, results)
+}
+
+// vaultSnippet returns a single-line, whitespace-collapsed window of content
+// around the match at byte offset idx, ellipsised when clipped.
+func vaultSnippet(content string, idx, matchLen int) string {
+	const pad = 40
+	start := idx - pad
+	if start < 0 {
+		start = 0
+	}
+	end := idx + matchLen + pad
+	if end > len(content) {
+		end = len(content)
+	}
+	// ponytail: byte-sliced window may cut a multi-byte rune at the edges; the
+	// JSON encoder substitutes U+FFFD so it's safe, just occasionally a stray
+	// glyph. Move to rune-aware windowing only if snippets look ugly in the UI.
+	window := strings.Join(strings.Fields(content[start:end]), " ")
+	if start > 0 {
+		window = "…" + window
+	}
+	if end < len(content) {
+		window += "…"
+	}
+	return window
+}

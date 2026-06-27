@@ -207,6 +207,115 @@ func TestGetVaultNote(t *testing.T) {
 	})
 }
 
+func TestGetVaultFile(t *testing.T) {
+	root := t.TempDir()
+	pngBytes := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02}
+	if err := os.WriteFile(filepath.Join(root, "img.png"), pngBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := newTestHandler(Config{VaultPath: root})
+
+	serveFile := func(relPath string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.GetVaultFile(w, httptest.NewRequest(http.MethodGet, "/vault/file?path="+relPath, nil))
+		return w
+	}
+
+	t.Run("serves binary with correct content-type", func(t *testing.T) {
+		w := serveFile("img.png")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", w.Code)
+		}
+		if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "image/png") {
+			t.Fatalf("content-type = %q, want image/png", ct)
+		}
+		if !strings.EqualFold(w.Body.String(), string(pngBytes)) {
+			t.Fatalf("body bytes mismatch")
+		}
+	})
+
+	t.Run("traversal rejected with 400", func(t *testing.T) {
+		if w := serveFile("../../etc/passwd"); w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", w.Code)
+		}
+	})
+
+	t.Run("missing file returns 404", func(t *testing.T) {
+		if w := serveFile("nope.png"); w.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404", w.Code)
+		}
+	})
+}
+
+func TestSearchVault(t *testing.T) {
+	root := t.TempDir()
+	writeVaultFile(t, root, "needle-in-name.md", "nothing relevant here")
+	writeVaultFile(t, root, "other.md", "this body contains the needle word")
+	writeVaultFile(t, root, "unrelated.md", "completely different")
+	h := newTestHandler(Config{VaultPath: root})
+
+	search := func(q string) []map[string]any {
+		w := httptest.NewRecorder()
+		h.SearchVault(w, httptest.NewRequest(http.MethodGet, "/vault/search?q="+q, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", w.Code)
+		}
+		var got []map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode: %v (body=%s)", err, w.Body.String())
+		}
+		return got
+	}
+
+	t.Run("matches by filename and by content", func(t *testing.T) {
+		got := search("needle")
+		paths := map[string]bool{}
+		for _, r := range got {
+			paths[r["path"].(string)] = true
+		}
+		if !paths["needle-in-name.md"] {
+			t.Fatal("expected filename match needle-in-name.md")
+		}
+		if !paths["other.md"] {
+			t.Fatal("expected content match other.md")
+		}
+		if paths["unrelated.md"] {
+			t.Fatal("unrelated.md should not match")
+		}
+	})
+
+	t.Run("content match carries a snippet", func(t *testing.T) {
+		for _, r := range search("needle") {
+			if r["path"] == "other.md" {
+				if s, _ := r["snippet"].(string); !strings.Contains(strings.ToLower(s), "needle") {
+					t.Fatalf("snippet missing match context: %q", s)
+				}
+			}
+		}
+	})
+
+	t.Run("empty q returns empty list (not whole vault)", func(t *testing.T) {
+		if got := search(""); len(got) != 0 {
+			t.Fatalf("empty q returned %d results, want 0", len(got))
+		}
+	})
+
+	t.Run("results are capped", func(t *testing.T) {
+		capRoot := t.TempDir()
+		for i := 0; i < 60; i++ {
+			writeVaultFile(t, capRoot, "n"+string(rune('a'+i%26))+string(rune('0'+i/26))+".md", "shared needle token")
+		}
+		hh := newTestHandler(Config{VaultPath: capRoot})
+		w := httptest.NewRecorder()
+		hh.SearchVault(w, httptest.NewRequest(http.MethodGet, "/vault/search?q=needle", nil))
+		var got []map[string]any
+		json.Unmarshal(w.Body.Bytes(), &got)
+		if len(got) > 50 {
+			t.Fatalf("results = %d, want <= 50 (cap)", len(got))
+		}
+	})
+}
+
 func TestSafeVaultPath(t *testing.T) {
 	root := t.TempDir()
 	// A real subdir + file so the happy path resolves an existing target.
