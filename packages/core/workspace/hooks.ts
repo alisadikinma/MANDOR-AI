@@ -22,6 +22,15 @@ export function useActorName() {
     return a?.name ?? "Unknown Agent";
   }, [agents]);
 
+  // The model an agent runs (e.g. "claude-opus-4-8", "Minimax M3"). Empty
+  // string when the agent isn't found or has no model set. There is no
+  // per-task model on the wire, so this is the canonical "which model is
+  // running" value for any task an agent owns.
+  const getAgentModel = useCallback((agentId: string) => {
+    const a = agents.find((a) => a.id === agentId);
+    return a?.model ?? "";
+  }, [agents]);
+
   const getSquadName = useCallback((squadId: string) => {
     const s = squads.find((s) => s.id === squadId);
     return s?.name ?? "Unknown Squad";
@@ -56,6 +65,7 @@ export function useActorName() {
     () => ({
       getMemberName,
       getAgentName,
+      getAgentModel,
       getSquadName,
       getActorName,
       getActorInitials,
@@ -66,6 +76,7 @@ export function useActorName() {
       getActorInitials,
       getActorName,
       getAgentName,
+      getAgentModel,
       getMemberName,
       getSquadName,
     ],

@@ -106,11 +106,18 @@ export const BoardCardContent = memo(function BoardCardContent({
 
   const showAssigneeName = showAssigneeSection && hasAssignee && !showStartDate && !showDueDate;
   const showUpdatedHint = showAssigneeName && !showChildProgress;
-  const { getActorName } = useActorName();
+  const { getActorName, getAgentModel } = useActorName();
+  // Agent role (e.g. "Researcher") is important context and must always be
+  // shown for agent assignees — never hidden by the date space-saving rule
+  // that applies to members. Members keep the original behaviour.
+  const isAgentAssignee = hasAssignee && issue.assignee_type === "agent";
   const assigneeName =
-    showAssigneeName && issue.assignee_type && issue.assignee_id
+    (showAssigneeName || isAgentAssignee) && issue.assignee_type && issue.assignee_id
       ? getActorName(issue.assignee_type, issue.assignee_id)
       : null;
+  // Which model the assigned agent runs (OPUS 4.8 / Minimax M3 / GLM 5.2 / …),
+  // shown alongside — not instead of — the role. Members/squads resolve to "".
+  const agentModel = isAgentAssignee ? getAgentModel(issue.assignee_id!) : "";
 
   const priorityLabel = t(($) => $.priority[issue.priority]);
   const priorityIconNode = showPriority ? (
@@ -298,6 +305,19 @@ export const BoardCardContent = memo(function BoardCardContent({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Model row: the LLM the assigned agent runs, on its own line so the
+          role name above keeps full width and never gets truncated. */}
+      {agentModel && (
+        <div className="mt-1.5 flex items-center">
+          <span
+            title={agentModel}
+            className="inline-flex max-w-full items-center truncate rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground"
+          >
+            {agentModel}
+          </span>
         </div>
       )}
     </div>
