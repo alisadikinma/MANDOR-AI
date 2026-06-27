@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@multica/core/api";
 import { AppSidebar } from "./app-sidebar";
 
-const { detail, deletePin, pins } = vi.hoisted(() => ({
+const { detail, deletePin, pins, vaultStatus } = vi.hoisted(() => ({
   detail: { current: { isPending: false, isError: false, data: null as unknown, error: null as unknown } },
   deletePin: vi.fn(),
+  vaultStatus: { current: { data: { enabled: false } } as { data?: { enabled: boolean } } },
   pins: {
     current: [
       {
@@ -43,7 +44,12 @@ vi.mock("@multica/ui/components/ui/sidebar", () => ({
   SidebarGroupLabel: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SidebarHeader: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SidebarMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SidebarMenuButton: ({ children }: { children: React.ReactNode }) => <button type="button">{children}</button>,
+  SidebarMenuButton: ({ children, render }: { children: React.ReactNode; render?: React.ReactNode }) => (
+    <button type="button">
+      {render}
+      {children}
+    </button>
+  ),
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SidebarRail: () => null,
   SidebarTrigger: () => <button type="button" data-slot="sidebar-trigger" />,
@@ -97,9 +103,13 @@ vi.mock("@multica/core/paths", () => ({
     runtimes: () => "/acme/runtimes",
     skills: () => "/acme/skills",
     settings: () => "/acme/settings",
+    vault: () => "/acme/vault",
     issueDetail: (id: string) => `/acme/issues/${id}`,
     projectDetail: (id: string) => `/acme/projects/${id}`,
   }),
+}));
+vi.mock("@multica/core/vault", () => ({
+  useVaultStatus: () => vaultStatus.current,
 }));
 vi.mock("@multica/core/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@multica/core/api")>();
@@ -161,5 +171,29 @@ describe("PinRow", () => {
     detail.current = { isPending: false, isError: false, data: { identifier: "MUL-123", title: "Keep this pin", status: "todo" }, error: null };
     render(<AppSidebar />);
     expect(await screen.findByText("MUL-123 Keep this pin")).toBeInTheDocument();
+  });
+});
+
+describe("Vault nav entry (gated on useVaultStatus)", () => {
+  beforeEach(() => {
+    detail.current = { isPending: false, isError: false, data: null, error: null };
+  });
+
+  it("shows the Vault link when the vault is enabled", () => {
+    vaultStatus.current = { data: { enabled: true } };
+    const { container } = render(<AppSidebar />);
+    expect(container.querySelector('a[href="/acme/vault"]')).not.toBeNull();
+  });
+
+  it("hides the Vault link when the vault is disabled", () => {
+    vaultStatus.current = { data: { enabled: false } };
+    const { container } = render(<AppSidebar />);
+    expect(container.querySelector('a[href="/acme/vault"]')).toBeNull();
+  });
+
+  it("hides the Vault link when status is unavailable (undefined)", () => {
+    vaultStatus.current = { data: undefined };
+    const { container } = render(<AppSidebar />);
+    expect(container.querySelector('a[href="/acme/vault"]')).toBeNull();
   });
 });

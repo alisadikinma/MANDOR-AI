@@ -28,6 +28,7 @@ describe("paths.workspace() shape", () => {
         "runtimes",
         "skills",
         "squads",
+        "vault",
         "settings",
       ]),
     );
@@ -49,6 +50,7 @@ describe("paths.workspace() shape", () => {
       ["runtimes", "runtimes"],
       ["skills", "skills"],
       ["squads", "squads"],
+      ["vault", "vault"],
       ["settings", "settings"],
     ];
     const wsAsAny = ws as unknown as Record<string, () => string>;

@@ -31,6 +31,7 @@ import {
   CircleUser,
   FolderKanban,
   BarChart3,
+  BookOpen,
   X,
   Zap,
   Users,
@@ -76,6 +77,7 @@ import { api, ApiError } from "@multica/core/api";
 import { useModalStore } from "@multica/core/modals";
 import { useConfigStore } from "@multica/core/config";
 import { useMyRuntimesNeedUpdate } from "@multica/core/runtimes/hooks";
+import { useVaultStatus } from "@multica/core/vault";
 import { pinListOptions } from "@multica/core/pins/queries";
 import { useDeletePin, useReorderPins } from "@multica/core/pins/mutations";
 import { issueDetailOptions } from "@multica/core/issues/queries";
@@ -115,6 +117,7 @@ type NavKey =
   | "agents"
   | "squads"
   | "usage"
+  | "vault"
   | "runtimes"
   | "skills"
   | "settings";
@@ -129,6 +132,7 @@ type NavLabelKey =
   | "agents"
   | "squads"
   | "usage"
+  | "vault"
   | "runtimes"
   | "skills"
   | "settings";
@@ -145,6 +149,8 @@ const workspaceNav: { key: NavKey; labelKey: NavLabelKey; icon: typeof Inbox }[]
   { key: "agents", labelKey: "agents", icon: Bot },
   { key: "squads", labelKey: "squads", icon: Users },
   { key: "usage", labelKey: "usage", icon: BarChart3 },
+  // Vault is gated at render on useVaultStatus — hidden unless VAULT_PATH is set.
+  { key: "vault", labelKey: "vault", icon: BookOpen },
 ];
 
 const configureNav: { key: NavKey; labelKey: NavLabelKey; icon: typeof Inbox }[] = [
@@ -368,6 +374,12 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
     [inboxItems],
   );
   const hasRuntimeUpdates = useMyRuntimesNeedUpdate(wsId);
+  // Explicit === true per CLAUDE.md API Compatibility: a missing/undefined
+  // status hides the Vault entry rather than showing it on a falsy coercion.
+  const vaultEnabled = useVaultStatus(wsId).data?.enabled === true;
+  const visibleWorkspaceNav = vaultEnabled
+    ? workspaceNav
+    : workspaceNav.filter((item) => item.key !== "vault");
   const { data: pinnedItems = EMPTY_PINS } = useQuery({
     ...pinListOptions(wsId ?? "", userId ?? ""),
     enabled: !!wsId && !!userId,
@@ -720,7 +732,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
             <SidebarGroupLabel>{t(($) => $.sidebar.workspace_group)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {workspaceNav.map((item) => {
+                {visibleWorkspaceNav.map((item) => {
                   const href = p[item.key]();
                   const isActive = isNavActive(pathname, href);
                   return (
