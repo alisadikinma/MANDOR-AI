@@ -995,3 +995,80 @@ export const McpOauthStartSchema = z
 export const EMPTY_MCP_OAUTH_START: { authorize_url: string } = {
   authorize_url: "",
 };
+
+// ---------------------------------------------------------------------------
+// Obsidian vault viewer (read-only). All schemas are lenient (.loose() + field
+// defaults) so a drifted server body degrades to a safe fallback instead of
+// white-screening the viewer. Types are co-located here (like AppConfigResponse)
+// and imported by client.ts.
+// ---------------------------------------------------------------------------
+
+export interface VaultStatus {
+  enabled: boolean;
+}
+
+export interface VaultTreeNode {
+  name: string;
+  /** Vault-root-relative, always "/"-separated. Doubles as the `path` query param. */
+  path: string;
+  /** "dir" | "file" — kept as string so an unknown future kind never throws. */
+  type: string;
+  children?: VaultTreeNode[];
+}
+
+export interface VaultNote {
+  path: string;
+  frontmatter: Record<string, unknown>;
+  body: string;
+}
+
+export interface VaultSearchResult {
+  name: string;
+  path: string;
+  snippet: string;
+}
+
+export const VaultStatusSchema = z
+  .object({ enabled: z.boolean().default(false) })
+  .loose();
+
+export const EMPTY_VAULT_STATUS: VaultStatus = { enabled: false };
+
+// Recursive: a dir node carries `children`. z.lazy lets the schema reference
+// itself; .loose() passes unknown server fields through unchanged.
+export const VaultTreeNodeSchema: z.ZodType = z.lazy(() =>
+  z
+    .object({
+      name: z.string().default(""),
+      path: z.string().default(""),
+      type: z.string().default("file"),
+      children: z.array(VaultTreeNodeSchema).optional(),
+    })
+    .loose(),
+);
+
+export const VaultTreeSchema = z.array(VaultTreeNodeSchema);
+
+export const EMPTY_VAULT_TREE: VaultTreeNode[] = [];
+
+export const VaultNoteSchema = z
+  .object({
+    path: z.string().default(""),
+    frontmatter: z.record(z.string(), z.unknown()).default({}),
+    body: z.string().default(""),
+  })
+  .loose();
+
+export const EMPTY_VAULT_NOTE: VaultNote = { path: "", frontmatter: {}, body: "" };
+
+export const VaultSearchResultSchema = z
+  .object({
+    name: z.string().default(""),
+    path: z.string().default(""),
+    snippet: z.string().default(""),
+  })
+  .loose();
+
+export const VaultSearchResultsSchema = z.array(VaultSearchResultSchema);
+
+export const EMPTY_VAULT_SEARCH_RESULTS: VaultSearchResult[] = [];

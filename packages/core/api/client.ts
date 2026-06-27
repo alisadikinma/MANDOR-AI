@@ -203,6 +203,18 @@ import {
   EMPTY_MCP_PROBE_REQUEST,
   RuntimeMcpSchema,
   EMPTY_RUNTIME_MCP,
+  VaultStatusSchema,
+  EMPTY_VAULT_STATUS,
+  VaultTreeSchema,
+  EMPTY_VAULT_TREE,
+  VaultNoteSchema,
+  EMPTY_VAULT_NOTE,
+  VaultSearchResultsSchema,
+  EMPTY_VAULT_SEARCH_RESULTS,
+  type VaultStatus,
+  type VaultTreeNode,
+  type VaultNote,
+  type VaultSearchResult,
 } from "./schemas";
 
 /** Identifies the calling client to the server.
@@ -1639,6 +1651,47 @@ export class ApiClient {
     await this.fetch(`/api/workspaces/${workspaceId}`, {
       method: "DELETE",
     });
+  }
+
+  // Vault (read-only Obsidian viewer). All responses run through
+  // parseWithFallback per CLAUDE.md "API Response Compatibility".
+  async getVaultStatus(wsId: string): Promise<VaultStatus> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${wsId}/vault/status`);
+    return parseWithFallback(raw, VaultStatusSchema, EMPTY_VAULT_STATUS, {
+      endpoint: "GET /api/workspaces/{id}/vault/status",
+    });
+  }
+
+  async getVaultTree(wsId: string): Promise<VaultTreeNode[]> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${wsId}/vault/tree`);
+    return parseWithFallback(raw, VaultTreeSchema, EMPTY_VAULT_TREE, {
+      endpoint: "GET /api/workspaces/{id}/vault/tree",
+    });
+  }
+
+  async getVaultNote(wsId: string, path: string): Promise<VaultNote> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${wsId}/vault/note?path=${encodeURIComponent(path)}`,
+    );
+    return parseWithFallback(raw, VaultNoteSchema, EMPTY_VAULT_NOTE, {
+      endpoint: "GET /api/workspaces/{id}/vault/note",
+    });
+  }
+
+  async searchVault(wsId: string, q: string): Promise<VaultSearchResult[]> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${wsId}/vault/search?q=${encodeURIComponent(q)}`,
+    );
+    return parseWithFallback(raw, VaultSearchResultsSchema, EMPTY_VAULT_SEARCH_RESULTS, {
+      endpoint: "GET /api/workspaces/{id}/vault/search",
+    });
+  }
+
+  // Absolute URL to a vault file (image / embed), for `<img src>` / fetch.
+  // The endpoint is auth+member gated; the browser carries the session cookie
+  // (credentials are included on same-origin requests).
+  vaultFileUrl(wsId: string, path: string): string {
+    return `${this.baseUrl}/api/workspaces/${wsId}/vault/file?path=${encodeURIComponent(path)}`;
   }
 
   // Skills
