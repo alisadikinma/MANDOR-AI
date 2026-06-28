@@ -2,12 +2,51 @@ package agent
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 )
+
+func TestDiscoverRouterModels(t *testing.T) {
+	// Missing config → nil (static catalog stands).
+	t.Setenv("HOME", t.TempDir())
+	if got := discoverRouterModels(); got != nil {
+		t.Fatalf("no config: expected nil, got %v", got)
+	}
+
+	// Present config → its provider models surface as a CCR-routed `claude` runtime.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".claude-code-router")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"Providers":[{"name":"ollama","models":["glm-5.2:cloud","qwen3.6:35b"]}]}`
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := discoverRouterModels()
+	if len(got) != 2 || got[0].ID != "glm-5.2:cloud" || got[0].Provider != "ollama" || got[1].ID != "qwen3.6:35b" {
+		t.Fatalf("unexpected router models: %+v", got)
+	}
+
+	// ListModels("claude") merges them in alongside the static Anthropic catalog,
+	// deduped by ID.
+	models, err := ListModels(context.Background(), "claude", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]int{}
+	for _, m := range models {
+		ids[m.ID]++
+	}
+	if ids["glm-5.2:cloud"] != 1 || ids["claude-opus-4-8"] != 1 {
+		t.Fatalf("expected merged+deduped catalog, got %+v", ids)
+	}
+}
 
 func TestListModelsStaticProviders(t *testing.T) {
 	ctx := context.Background()

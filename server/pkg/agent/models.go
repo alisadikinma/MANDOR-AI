@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -95,7 +96,7 @@ func ListModels(ctx context.Context, providerType, executablePath string) ([]Mod
 	case "claude":
 		models := claudeStaticModels()
 		annotateClaudeThinking(ctx, models, executablePath)
-		return models, nil
+		return mergeModels(models, discoverRouterModels()), nil
 	case "codex":
 		models := codexStaticModels()
 		annotateCodexThinking(ctx, models, executablePath)
@@ -219,6 +220,56 @@ func claudeStaticModels() []Model {
 		{ID: "claude-opus-4-6", Label: "Claude Opus 4.6", Provider: "anthropic"},
 		{ID: "claude-sonnet-4-5", Label: "Claude Sonnet 4.5", Provider: "anthropic"},
 	}
+}
+
+// discoverRouterModels reads a local Claude Code Router (CCR) config, if present,
+// and returns its provider model IDs so a CCR-routed `claude` runtime surfaces the
+// models it can actually reach (e.g. glm-5.2:cloud) instead of only Anthropic's.
+// Best-effort: a missing or unparseable config returns nil and the static catalog
+// stands. ponytail: parses CCR's config shape directly; generalize to other
+// routers if one ever shows up.
+func discoverRouterModels() []Model {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	raw, err := os.ReadFile(filepath.Join(home, ".claude-code-router", "config.json"))
+	if err != nil {
+		return nil
+	}
+	var cfg struct {
+		Providers []struct {
+			Name   string   `json:"name"`
+			Models []string `json:"models"`
+		} `json:"Providers"`
+	}
+	if json.Unmarshal(raw, &cfg) != nil {
+		return nil
+	}
+	var out []Model
+	for _, p := range cfg.Providers {
+		for _, id := range p.Models {
+			out = append(out, Model{ID: id, Label: id, Provider: p.Name})
+		}
+	}
+	return out
+}
+
+// mergeModels appends extra models to base, skipping any whose ID already
+// appears in base so a router-advertised duplicate never shadows a static entry.
+func mergeModels(base, extra []Model) []Model {
+	seen := make(map[string]bool, len(base))
+	for _, m := range base {
+		seen[m.ID] = true
+	}
+	for _, m := range extra {
+		if seen[m.ID] {
+			continue
+		}
+		seen[m.ID] = true
+		base = append(base, m)
+	}
+	return base
 }
 
 func codexStaticModels() []Model {
