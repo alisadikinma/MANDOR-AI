@@ -231,6 +231,11 @@ func buildChatPrompt(task Task) string {
 			}
 		}
 		b.WriteString("Use `multica attachment download <id>` to fetch each file locally before referring to it.\n")
+		// ponytail: keep large docs out of the context budget. The agent runtime
+		// (Claude Code) surfaces xberg as a deferred MCP tool; extracting to text
+		// is far cheaper than reading raw bytes. "if available" keeps this safe
+		// for non-Claude runtimes (codex/gemini) that lack the tool.
+		b.WriteString("For documents (PDF, Office, images, etc.), extract their text with a document-extraction MCP tool if available (e.g. xberg `mcp__xberg__extract_file`) instead of reading the raw file — it keeps the full file out of your context budget.\n")
 	}
 	return b.String()
 }
